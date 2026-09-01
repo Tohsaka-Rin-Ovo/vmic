@@ -1,4 +1,4 @@
-import Foundation
+import SwiftUI
 
 enum AppLanguage: String, CaseIterable, Identifiable {
     case chinese
@@ -18,14 +18,53 @@ enum AppLanguage: String, CaseIterable, Identifiable {
     }
 }
 
+enum AppThemeMode: String, CaseIterable, Identifiable {
+    case system
+    case light
+    case dark
+
+    var id: String {
+        rawValue
+    }
+
+    var colorScheme: ColorScheme? {
+        switch self {
+        case .system:
+            return nil
+        case .light:
+            return .light
+        case .dark:
+            return .dark
+        }
+    }
+}
+
 enum VmicText {
     case settings
+    case theme
     case language
+    case about
+    case themeSystem
+    case themeLight
+    case themeDark
+    case version
+    case aboutDetail
     case checking
     case openAddAudioSettings
     case allowVmic
     case openSoftwareUpdate
     case callRoute
+    case diagnosticReady
+    case diagnosticWaitingForCall
+    case diagnosticEnableSwitch
+    case diagnosticNotCompatible
+    case systemPermission
+    case injectionChannel
+    case injectionSwitch
+    case available
+    case unavailable
+    case enabled
+    case disabled
     case callDetected
     case noSupportedCall
     case injecting
@@ -84,6 +123,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var themeMode: AppThemeMode {
+        didSet {
+            UserDefaults.standard.set(themeMode.rawValue, forKey: Self.themeKey)
+        }
+    }
+
     @Published var singlePlayback: Bool {
         didSet {
             UserDefaults.standard.set(singlePlayback, forKey: Self.singlePlaybackKey)
@@ -97,12 +142,15 @@ final class AppSettingsStore: ObservableObject {
     }
 
     private static let languageKey = "vmic.language"
+    private static let themeKey = "vmic.theme"
     private static let singlePlaybackKey = "vmic.singlePlayback"
     private static let showDurationKey = "vmic.showDuration"
 
     init() {
         let rawValue = UserDefaults.standard.string(forKey: Self.languageKey)
         language = rawValue.flatMap(AppLanguage.init(rawValue:)) ?? .chinese
+        let rawTheme = UserDefaults.standard.string(forKey: Self.themeKey)
+        themeMode = rawTheme.flatMap(AppThemeMode.init(rawValue:)) ?? .system
         singlePlayback = UserDefaults.standard.bool(forKey: Self.singlePlaybackKey)
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
     }
@@ -120,8 +168,22 @@ final class AppSettingsStore: ObservableObject {
         switch key {
         case .settings:
             return "设置"
+        case .theme:
+            return "主题"
         case .language:
             return "语言"
+        case .about:
+            return "关于"
+        case .themeSystem:
+            return "跟随系统"
+        case .themeLight:
+            return "浅色"
+        case .themeDark:
+            return "深色"
+        case .version:
+            return "版本"
+        case .aboutDetail:
+            return "vmic 使用 iOS 18.2+ 的通话音频注入能力，将本地播放的音频加入支持的通话输入流。它不是系统级虚拟麦克风。"
         case .checking:
             return "正在检查 vmic"
         case .openAddAudioSettings:
@@ -131,7 +193,29 @@ final class AppSettingsStore: ObservableObject {
         case .openSoftwareUpdate:
             return "打开系统更新"
         case .callRoute:
-            return "通话路径"
+            return "注入通道"
+        case .diagnosticReady:
+            return "当前通话可用，可以播放音频测试对方是否能听到。"
+        case .diagnosticWaitingForCall:
+            return "请先进入电话、FaceTime 或支持的 VoIP 通话。"
+        case .diagnosticEnableSwitch:
+            return "已检测到注入通道，开启右侧开关后再播放音频。"
+        case .diagnosticNotCompatible:
+            return "iOS 检测到通话不等于注入通道可用。当前通话没有提供 Apple 麦克风注入通道，KOOK/微信需要实测兼容。"
+        case .systemPermission:
+            return "系统权限"
+        case .injectionChannel:
+            return "通道"
+        case .injectionSwitch:
+            return "开关"
+        case .available:
+            return "可用"
+        case .unavailable:
+            return "不可用"
+        case .enabled:
+            return "已开启"
+        case .disabled:
+            return "未开启"
         case .callDetected:
             return "检测到通话"
         case .noSupportedCall:
@@ -235,8 +319,22 @@ final class AppSettingsStore: ObservableObject {
         switch key {
         case .settings:
             return "Settings"
+        case .theme:
+            return "Theme"
         case .language:
             return "Language"
+        case .about:
+            return "About"
+        case .themeSystem:
+            return "System"
+        case .themeLight:
+            return "Light"
+        case .themeDark:
+            return "Dark"
+        case .version:
+            return "Version"
+        case .aboutDetail:
+            return "vmic uses iOS 18.2+ call audio injection to add local app audio to supported call input streams. It is not a system-wide virtual microphone."
         case .checking:
             return "Checking vmic"
         case .openAddAudioSettings:
@@ -246,7 +344,29 @@ final class AppSettingsStore: ObservableObject {
         case .openSoftwareUpdate:
             return "Open Software Update"
         case .callRoute:
-            return "Call Route"
+            return "Injection Channel"
+        case .diagnosticReady:
+            return "This call is available. Play an audio file to check whether the other side can hear it."
+        case .diagnosticWaitingForCall:
+            return "Join a Phone, FaceTime, or supported VoIP call first."
+        case .diagnosticEnableSwitch:
+            return "The injection channel is available. Turn on the switch before playing audio."
+        case .diagnosticNotCompatible:
+            return "The iOS call indicator does not guarantee an injection channel. This call has not exposed Apple's microphone injection channel; KOOK and WeChat need device testing."
+        case .systemPermission:
+            return "Permission"
+        case .injectionChannel:
+            return "Channel"
+        case .injectionSwitch:
+            return "Switch"
+        case .available:
+            return "Available"
+        case .unavailable:
+            return "Unavailable"
+        case .enabled:
+            return "Enabled"
+        case .disabled:
+            return "Disabled"
         case .callDetected:
             return "Call Detected"
         case .noSupportedCall:

@@ -1,20 +1,45 @@
 import SwiftUI
+import UIKit
 
 enum VmicTheme {
-    static let ink = Color(red: 0.06, green: 0.10, blue: 0.18)
-    static let mutedInk = Color(red: 0.34, green: 0.41, blue: 0.52)
+    static let ink = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.90, green: 0.95, blue: 1.00, alpha: 1)
+            : UIColor(red: 0.06, green: 0.10, blue: 0.18, alpha: 1)
+    })
+    static let mutedInk = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.62, green: 0.70, blue: 0.82, alpha: 1)
+            : UIColor(red: 0.34, green: 0.41, blue: 0.52, alpha: 1)
+    })
     static let blue = Color(red: 0.08, green: 0.34, blue: 0.78)
     static let brightBlue = Color(red: 0.12, green: 0.48, blue: 0.92)
-    static let paleBlue = Color(red: 0.91, green: 0.96, blue: 1.00)
+    static let paleBlue = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.07, green: 0.16, blue: 0.28, alpha: 1)
+            : UIColor(red: 0.91, green: 0.96, blue: 1.00, alpha: 1)
+    })
     static let cyan = Color(red: 0.21, green: 0.73, blue: 0.92)
     static let mint = Color(red: 0.16, green: 0.72, blue: 0.62)
-    static let surface = Color.white.opacity(0.86)
+    static let surface = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.07, green: 0.11, blue: 0.18, alpha: 0.88)
+            : UIColor(white: 1, alpha: 0.86)
+    })
 
     static var appBackground: some View {
         LinearGradient(
             colors: [
-                Color(red: 0.88, green: 0.95, blue: 1.00),
-                Color(red: 0.98, green: 0.99, blue: 1.00)
+                Color(UIColor { traits in
+                    traits.userInterfaceStyle == .dark
+                        ? UIColor(red: 0.03, green: 0.07, blue: 0.13, alpha: 1)
+                        : UIColor(red: 0.88, green: 0.95, blue: 1.00, alpha: 1)
+                }),
+                Color(UIColor { traits in
+                    traits.userInterfaceStyle == .dark
+                        ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 1)
+                        : UIColor(red: 0.98, green: 0.99, blue: 1.00, alpha: 1)
+                })
             ],
             startPoint: .top,
             endPoint: .bottom

@@ -106,5 +106,6 @@ struct ContentView: View {
                 await injectionManager.refresh()
             }
         }
+        .preferredColorScheme(settingsStore.themeMode.colorScheme)
     }
 }

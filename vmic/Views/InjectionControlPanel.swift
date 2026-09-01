@@ -4,6 +4,22 @@ struct InjectionControlPanel: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    private var diagnosticText: String {
+        if injectionManager.isInjectionAvailableInCurrentCall && injectionManager.isInjectionEnabled {
+            return settingsStore.text(.diagnosticReady)
+        }
+
+        if injectionManager.isInjectionAvailableInCurrentCall {
+            return settingsStore.text(.diagnosticEnableSwitch)
+        }
+
+        if injectionManager.isInjectionEnabled {
+            return settingsStore.text(.diagnosticNotCompatible)
+        }
+
+        return settingsStore.text(.diagnosticWaitingForCall)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack(alignment: .center, spacing: 12) {
@@ -47,17 +63,31 @@ struct InjectionControlPanel: View {
 
             HStack(spacing: 12) {
                 StatusPill(
-                    title: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.callDetected) : settingsStore.text(.noSupportedCall),
+                    title: settingsStore.text(.systemPermission),
+                    value: injectionManager.permissionState.canEnableInjection ? settingsStore.text(.available) : settingsStore.text(.unavailable),
+                    systemImage: injectionManager.permissionState.canEnableInjection ? "checkmark.circle.fill" : "exclamationmark.circle",
+                    tint: injectionManager.permissionState.canEnableInjection ? VmicTheme.mint : VmicTheme.mutedInk
+                )
+
+                StatusPill(
+                    title: settingsStore.text(.injectionChannel),
+                    value: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.available) : settingsStore.text(.unavailable),
                     systemImage: injectionManager.isInjectionAvailableInCurrentCall ? "phone.fill" : "phone",
                     tint: injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : VmicTheme.mutedInk
                 )
 
                 StatusPill(
-                    title: injectionManager.isInjectionEnabled ? settingsStore.text(.injecting) : settingsStore.text(.injectionOff),
+                    title: settingsStore.text(.injectionSwitch),
+                    value: injectionManager.isInjectionEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
                     systemImage: injectionManager.isInjectionEnabled ? "waveform.badge.plus" : "waveform",
                     tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
                 )
             }
+
+            Text(diagnosticText)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(16)
         .background(VmicTheme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -70,15 +100,24 @@ struct InjectionControlPanel: View {
 
 private struct StatusPill: View {
     let title: String
+    let value: String
     let systemImage: String
     let tint: Color
 
     var body: some View {
-        Label(title, systemImage: systemImage)
-            .font(.caption.weight(.medium))
-            .foregroundStyle(tint)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
-            .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        VStack(alignment: .leading, spacing: 4) {
+            Label(title, systemImage: systemImage)
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(tint)
+
+            Text(value)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(VmicTheme.ink)
+                .lineLimit(1)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
