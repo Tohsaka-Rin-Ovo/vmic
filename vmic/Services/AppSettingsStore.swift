@@ -42,6 +42,22 @@ enum VmicText {
     case importAudio
     case importShort
     case importHint
+    case localAudio
+    case unknownArtist
+    case rename
+    case renameAudio
+    case audioName
+    case save
+    case done
+    case cancel
+    case removeFromLibrary
+    case sortingEnabled
+    case playback
+    case singlePlayback
+    case singlePlaybackDetail
+    case list
+    case showDuration
+    case showDurationDetail
     case delete
     case playSound(String)
     case permissionChecking
@@ -68,11 +84,27 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var singlePlayback: Bool {
+        didSet {
+            UserDefaults.standard.set(singlePlayback, forKey: Self.singlePlaybackKey)
+        }
+    }
+
+    @Published var showDuration: Bool {
+        didSet {
+            UserDefaults.standard.set(showDuration, forKey: Self.showDurationKey)
+        }
+    }
+
     private static let languageKey = "vmic.language"
+    private static let singlePlaybackKey = "vmic.singlePlayback"
+    private static let showDurationKey = "vmic.showDuration"
 
     init() {
         let rawValue = UserDefaults.standard.string(forKey: Self.languageKey)
         language = rawValue.flatMap(AppLanguage.init(rawValue:)) ?? .chinese
+        singlePlayback = UserDefaults.standard.bool(forKey: Self.singlePlaybackKey)
+        showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
     }
 
     func text(_ key: VmicText) -> String {
@@ -131,7 +163,39 @@ final class AppSettingsStore: ObservableObject {
         case .importShort:
             return "导入"
         case .importHint:
-            return "导入音频文件后会生成按钮。"
+            return "导入音频文件后会生成列表项。"
+        case .localAudio:
+            return "本地"
+        case .unknownArtist:
+            return "未知作者"
+        case .rename:
+            return "重命名"
+        case .renameAudio:
+            return "重命名音频"
+        case .audioName:
+            return "音频名称"
+        case .save:
+            return "保存"
+        case .done:
+            return "完成"
+        case .cancel:
+            return "取消"
+        case .removeFromLibrary:
+            return "从列表移除"
+        case .sortingEnabled:
+            return "排序模式已开启"
+        case .playback:
+            return "播放"
+        case .singlePlayback:
+            return "单音频播放"
+        case .singlePlaybackDetail:
+            return "播放新音频时停止其他音频。"
+        case .list:
+            return "列表"
+        case .showDuration:
+            return "显示时长"
+        case .showDurationDetail:
+            return "在音频列表右侧显示时长。"
         case .delete:
             return "删除"
         case .playSound(let title):
@@ -214,7 +278,39 @@ final class AppSettingsStore: ObservableObject {
         case .importShort:
             return "Import"
         case .importHint:
-            return "Import audio files to create pads."
+            return "Import audio files to create list items."
+        case .localAudio:
+            return "Local"
+        case .unknownArtist:
+            return "Unknown Artist"
+        case .rename:
+            return "Rename"
+        case .renameAudio:
+            return "Rename Audio"
+        case .audioName:
+            return "Audio Name"
+        case .save:
+            return "Save"
+        case .done:
+            return "Done"
+        case .cancel:
+            return "Cancel"
+        case .removeFromLibrary:
+            return "Remove from Library"
+        case .sortingEnabled:
+            return "Sorting enabled"
+        case .playback:
+            return "Playback"
+        case .singlePlayback:
+            return "Single Playback"
+        case .singlePlaybackDetail:
+            return "Stop other sounds when a new sound plays."
+        case .list:
+            return "List"
+        case .showDuration:
+            return "Show Duration"
+        case .showDurationDetail:
+            return "Show durations on the right side of the audio list."
         case .delete:
             return "Delete"
         case .playSound(let title):

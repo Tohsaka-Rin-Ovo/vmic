@@ -1,5 +1,6 @@
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 struct SoundboardView: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
@@ -7,11 +8,11 @@ struct SoundboardView: View {
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    @State private var editMode: EditMode = .inactive
     @State private var isImporterPresented = false
-
-    private let columns = [
-        GridItem(.adaptive(minimum: 154, maximum: 230), spacing: 12)
-    ]
+    @State private var clipBeingRenamed: SoundClip?
+    @State private var renameText = ""
+    @State private var showsSortingNotice = false
 
     private var activeClips: [SoundClip] {
         libraryStore.clips.filter {
@@ -23,60 +24,120 @@ struct SoundboardView: View {
         ZStack {
             VmicTheme.appBackground
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: 22) {
+            List {
+                Section {
                     PlayerHeader(activeClips: activeClips)
+                        .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+
                     InjectionControlPanel()
+                        .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
 
                     if let error = injectionManager.lastError ?? libraryStore.lastError ?? playbackManager.lastError {
                         ErrorBanner(message: error)
+                            .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 12, trailing: 16))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                     }
+                }
 
-                    if libraryStore.clips.isEmpty {
+                if libraryStore.clips.isEmpty {
+                    Section {
                         EmptySoundboardView(importAction: {
                             isImporterPresented = true
                         })
-                    } else {
-                        LazyVGrid(columns: columns, alignment: .leading, spacing: 12) {
-                            ForEach(libraryStore.clips) { clip in
-                                SoundClipButton(
-                                    clip: clip,
-                                    isActive: playbackManager.activeClipIDs.contains(clip.id),
-                                    play: {
-                                        playbackManager.play(clip, from: libraryStore.soundsDirectory)
-                                    },
-                                    delete: {
-                                        libraryStore.delete(clip)
-                                    }
-                                )
+                        .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                } else {
+                    Section {
+                        ForEach(libraryStore.clips) { clip in
+                            AudioListRow(
+                                clip: clip,
+                                artworkDirectory: libraryStore.artworkDirectory,
+                                isActive: playbackManager.activeClipIDs.contains(clip.id),
+                                play: {
+                                    play(clip)
+                                },
+                                rename: {
+                                    clipBeingRenamed = clip
+                                    renameText = clip.title
+                                },
+                                remove: {
+                                    libraryStore.delete(clip)
+                                }
+                            )
+                            .onLongPressGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    editMode = .active
+                                    showsSortingNotice = true
+                                }
                             }
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
                         }
+                        .onMove(perform: libraryStore.move)
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 12)
-                .padding(.bottom, 92)
+            }
+            .environment(\.editMode, $editMode)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+            .padding(.bottom, libraryStore.clips.isEmpty ? 0 : 78)
+
+            if !libraryStore.clips.isEmpty {
+                VStack {
+                    Spacer()
+                    BottomTransportBar(
+                        hasActivePlayback: !playbackManager.activeClipIDs.isEmpty,
+                        stopAction: {
+                            playbackManager.stopAll()
+                        },
+                        importAction: {
+                            isImporterPresented = true
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 10)
+                }
             }
 
-            VStack {
-                Spacer()
-                BottomTransportBar(
-                    hasActivePlayback: !playbackManager.activeClipIDs.isEmpty,
-                    stopAction: {
-                        playbackManager.stopAll()
-                    },
-                    importAction: {
-                        isImporterPresented = true
-                    }
-                )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
+            if showsSortingNotice {
+                VStack {
+                    Text(settingsStore.text(.sortingEnabled))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(VmicTheme.ink.opacity(0.88), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .padding(.top, 8)
+
+                    Spacer()
+                }
+                .transition(.opacity)
+                .task {
+                    try? await Task.sleep(nanoseconds: 1_400_000_000)
+                    showsSortingNotice = false
+                }
             }
         }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if editMode.isEditing {
+                    Button(settingsStore.text(.done)) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            editMode = .inactive
+                        }
+                    }
+                }
+
                 Button {
                     isImporterPresented = true
                 } label: {
@@ -100,11 +161,46 @@ struct SoundboardView: View {
                 libraryStore.lastError = error.localizedDescription
             }
         }
+        .alert(settingsStore.text(.renameAudio), isPresented: Binding(
+            get: {
+                clipBeingRenamed != nil
+            },
+            set: { isPresented in
+                if !isPresented {
+                    clipBeingRenamed = nil
+                    renameText = ""
+                }
+            }
+        )) {
+            TextField(settingsStore.text(.audioName), text: $renameText)
+
+            Button(settingsStore.text(.cancel), role: .cancel) {
+                clipBeingRenamed = nil
+                renameText = ""
+            }
+
+            Button(settingsStore.text(.save)) {
+                if let clip = clipBeingRenamed {
+                    libraryStore.rename(clip, to: renameText)
+                }
+                clipBeingRenamed = nil
+                renameText = ""
+            }
+        }
+    }
+
+    private func play(_ clip: SoundClip) {
+        if settingsStore.singlePlayback {
+            playbackManager.stopAll()
+        }
+
+        playbackManager.play(clip, from: libraryStore.soundsDirectory)
     }
 }
 
 private struct PlayerHeader: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let activeClips: [SoundClip]
@@ -128,19 +224,10 @@ private struct PlayerHeader: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 18) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [VmicTheme.blue, VmicTheme.cyan],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 104, height: 104)
-
-                    WaveformMark(isActive: !activeClips.isEmpty)
-                }
+                CoverArtworkView(
+                    artworkURL: activeClips.first?.artworkURL(in: libraryStore.artworkDirectory),
+                    size: 104
+                )
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text(title)
@@ -181,20 +268,117 @@ private struct PlayerHeader: View {
     }
 }
 
-private struct WaveformMark: View {
-    let isActive: Bool
+private struct AudioListRow: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    private let heights: [CGFloat] = [24, 42, 32, 58, 38, 50, 28]
+    let clip: SoundClip
+    let artworkDirectory: URL
+    let isActive: Bool
+    let play: () -> Void
+    let rename: () -> Void
+    let remove: () -> Void
 
     var body: some View {
-        HStack(alignment: .center, spacing: 5) {
-            ForEach(Array(heights.enumerated()), id: \.offset) { index, height in
-                RoundedRectangle(cornerRadius: 3, style: .continuous)
-                    .fill(Color.white.opacity(index.isMultiple(of: 2) ? 0.94 : 0.72))
-                    .frame(width: 6, height: isActive ? height : max(16, height * 0.48))
-                    .animation(.easeInOut(duration: 0.2), value: isActive)
+        HStack(spacing: 13) {
+            ZStack {
+                CoverArtworkView(artworkURL: clip.artworkURL(in: artworkDirectory), size: 58)
+
+                if isActive {
+                    Circle()
+                        .fill(VmicTheme.ink.opacity(0.72))
+                        .frame(width: 30, height: 30)
+
+                    Image(systemName: "play.fill")
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(.white)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text(clip.title)
+                    .font(.system(size: 17, weight: .semibold, design: .serif))
+                    .foregroundStyle(isActive ? Color(red: 0.96, green: 0.16, blue: 0.20) : VmicTheme.ink)
+                    .lineLimit(1)
+
+                HStack(spacing: 6) {
+                    Text(settingsStore.text(.localAudio))
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(Color(red: 0.88, green: 0.53, blue: 0.10))
+                        .padding(.horizontal, 3)
+                        .padding(.vertical, 1)
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 3, style: .continuous)
+                                .stroke(Color(red: 0.88, green: 0.53, blue: 0.10), lineWidth: 1)
+                        }
+
+                    Text(clip.artist?.isEmpty == false ? clip.artist! : settingsStore.text(.unknownArtist))
+                        .font(.subheadline)
+                        .foregroundStyle(isActive ? Color(red: 0.96, green: 0.16, blue: 0.20) : VmicTheme.mutedInk)
+                        .lineLimit(1)
+                }
+            }
+
+            Spacer(minLength: 8)
+
+            if settingsStore.showDuration {
+                Text(formatDuration(clip.durationSeconds))
+                    .font(.subheadline)
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+                    .frame(width: 48, alignment: .trailing)
+            }
+
+            Menu {
+                Button(action: rename) {
+                    Label(settingsStore.text(.rename), systemImage: "pencil")
+                }
+
+                Button(role: .destructive, action: remove) {
+                    Label(settingsStore.text(.removeFromLibrary), systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.body.weight(.bold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .frame(width: 34, height: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
+        .onTapGesture(perform: play)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(settingsStore.text(.playSound(clip.title)))
+    }
+
+    private func formatDuration(_ seconds: Double?) -> String {
+        guard let seconds, seconds.isFinite, seconds > 0 else {
+            return "--:--"
+        }
+
+        let totalSeconds = Int(seconds.rounded())
+        return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
+private struct CoverArtworkView: View {
+    let artworkURL: URL?
+    let size: CGFloat
+
+    var body: some View {
+        Group {
+            if let artworkURL, let image = UIImage(contentsOfFile: artworkURL.path) {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+            } else {
+                Image("PlaceholderCover")
+                    .resizable()
+                    .scaledToFill()
             }
         }
+        .frame(width: size, height: size)
+        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -220,16 +404,7 @@ private struct EmptySoundboardView: View {
 
     var body: some View {
         VStack(spacing: 18) {
-            WaveformMark(isActive: false)
-                .frame(width: 112, height: 72)
-                .background(
-                    LinearGradient(
-                        colors: [VmicTheme.blue.opacity(0.92), VmicTheme.cyan.opacity(0.92)],
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    ),
-                    in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-                )
+            CoverArtworkView(artworkURL: nil, size: 112)
 
             VStack(spacing: 6) {
                 Text(settingsStore.text(.noSounds))

@@ -17,7 +17,6 @@
 		5D4B601E2D70000100A00001 /* UnsupportedOSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */; };
 		5D4B60202D70000100A00001 /* SoundboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B601F2D70000100A00001 /* SoundboardView.swift */; };
 		5D4B60222D70000100A00001 /* InjectionControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60212D70000100A00001 /* InjectionControlPanel.swift */; };
-		5D4B60242D70000100A00001 /* SoundClipButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60232D70000100A00001 /* SoundClipButton.swift */; };
 		5D4B60262D70000100A00001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D4B60252D70000100A00001 /* Assets.xcassets */; };
 		5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60302D70000100A00001 /* VmicTheme.swift */; };
 		5D4B60332D70000100A00001 /* CheckingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60322D70000100A00001 /* CheckingView.swift */; };
@@ -37,7 +36,6 @@
 		5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedOSView.swift; sourceTree = "<group>"; };
 		5D4B601F2D70000100A00001 /* SoundboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundboardView.swift; sourceTree = "<group>"; };
 		5D4B60212D70000100A00001 /* InjectionControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionControlPanel.swift; sourceTree = "<group>"; };
-		5D4B60232D70000100A00001 /* SoundClipButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundClipButton.swift; sourceTree = "<group>"; };
 		5D4B60252D70000100A00001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		5D4B60272D70000100A00001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5D4B60302D70000100A00001 /* VmicTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VmicTheme.swift; sourceTree = "<group>"; };
@@ -113,7 +111,6 @@
 				5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */,
 				5D4B601F2D70000100A00001 /* SoundboardView.swift */,
 				5D4B60212D70000100A00001 /* InjectionControlPanel.swift */,
-				5D4B60232D70000100A00001 /* SoundClipButton.swift */,
 				5D4B60302D70000100A00001 /* VmicTheme.swift */,
 				5D4B60322D70000100A00001 /* CheckingView.swift */,
 				5D4B60362D70000100A00001 /* SettingsDrawer.swift */,
@@ -200,7 +197,6 @@
 				5D4B601E2D70000100A00001 /* UnsupportedOSView.swift in Sources */,
 				5D4B60202D70000100A00001 /* SoundboardView.swift in Sources */,
 				5D4B60222D70000100A00001 /* InjectionControlPanel.swift in Sources */,
-				5D4B60242D70000100A00001 /* SoundClipButton.swift in Sources */,
 				5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */,
 				5D4B60332D70000100A00001 /* CheckingView.swift in Sources */,
 				5D4B60352D70000100A00001 /* AppSettingsStore.swift in Sources */,
