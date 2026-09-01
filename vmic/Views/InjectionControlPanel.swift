@@ -88,6 +88,14 @@ struct InjectionControlPanel: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(VmicTheme.mutedInk)
                 .fixedSize(horizontal: false, vertical: true)
+
+            NavigationLink {
+                DebugDiagnosticsView()
+            } label: {
+                Label(settingsStore.text(.debug), systemImage: "stethoscope")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(VmicTheme.blue)
+            }
         }
         .padding(16)
         .background(VmicTheme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))

@@ -44,6 +44,7 @@ enum VmicText {
     case theme
     case language
     case about
+    case debug
     case themeSystem
     case themeLight
     case themeDark
@@ -53,6 +54,21 @@ enum VmicText {
     case openAddAudioSettings
     case allowVmic
     case openSoftwareUpdate
+    case refreshStatus
+    case requestPermission
+    case enableInjection
+    case disableInjection
+    case openSystemSwitch
+    case device
+    case systemVersion
+    case minimumVersion
+    case permissionStateLabel
+    case lastRefresh
+    case lastCallEvent
+    case lastInjectionChange
+    case lastError
+    case noError
+    case never
     case callRoute
     case diagnosticReady
     case diagnosticWaitingForCall
@@ -174,6 +190,8 @@ final class AppSettingsStore: ObservableObject {
             return "语言"
         case .about:
             return "关于"
+        case .debug:
+            return "调试"
         case .themeSystem:
             return "跟随系统"
         case .themeLight:
@@ -192,6 +210,36 @@ final class AppSettingsStore: ObservableObject {
             return "允许 vmic"
         case .openSoftwareUpdate:
             return "打开系统更新"
+        case .refreshStatus:
+            return "刷新状态"
+        case .requestPermission:
+            return "请求权限"
+        case .enableInjection:
+            return "尝试开启注入"
+        case .disableInjection:
+            return "关闭注入"
+        case .openSystemSwitch:
+            return "打开系统开关"
+        case .device:
+            return "设备"
+        case .systemVersion:
+            return "系统版本"
+        case .minimumVersion:
+            return "最低要求"
+        case .permissionStateLabel:
+            return "权限状态"
+        case .lastRefresh:
+            return "上次刷新"
+        case .lastCallEvent:
+            return "上次通道事件"
+        case .lastInjectionChange:
+            return "上次注入变更"
+        case .lastError:
+            return "最近错误"
+        case .noError:
+            return "无"
+        case .never:
+            return "暂无"
         case .callRoute:
             return "注入通道"
         case .diagnosticReady:
@@ -325,6 +373,8 @@ final class AppSettingsStore: ObservableObject {
             return "Language"
         case .about:
             return "About"
+        case .debug:
+            return "Debug"
         case .themeSystem:
             return "System"
         case .themeLight:
@@ -343,6 +393,36 @@ final class AppSettingsStore: ObservableObject {
             return "Allow vmic"
         case .openSoftwareUpdate:
             return "Open Software Update"
+        case .refreshStatus:
+            return "Refresh Status"
+        case .requestPermission:
+            return "Request Permission"
+        case .enableInjection:
+            return "Try Enable Injection"
+        case .disableInjection:
+            return "Disable Injection"
+        case .openSystemSwitch:
+            return "Open System Switch"
+        case .device:
+            return "Device"
+        case .systemVersion:
+            return "System Version"
+        case .minimumVersion:
+            return "Minimum"
+        case .permissionStateLabel:
+            return "Permission"
+        case .lastRefresh:
+            return "Last Refresh"
+        case .lastCallEvent:
+            return "Last Channel Event"
+        case .lastInjectionChange:
+            return "Last Injection Change"
+        case .lastError:
+            return "Last Error"
+        case .noError:
+            return "None"
+        case .never:
+            return "Never"
         case .callRoute:
             return "Injection Channel"
         case .diagnosticReady:

@@ -66,6 +66,9 @@ final class MicrophoneInjectionManager: ObservableObject {
     @Published private(set) var permissionState: InjectionPermissionState = .checking
     @Published private(set) var isInjectionEnabled = false
     @Published private(set) var isInjectionAvailableInCurrentCall = false
+    @Published private(set) var lastRefreshAt: Date?
+    @Published private(set) var lastCapabilitiesChangeAt: Date?
+    @Published private(set) var lastInjectionModeChangeAt: Date?
     @Published var lastError: String?
 
     private var observerTask: Task<Void, Never>?
@@ -81,6 +84,8 @@ final class MicrophoneInjectionManager: ObservableObject {
     }
 
     func refresh() async {
+        lastRefreshAt = Date()
+
         guard #available(iOS 18.2, *) else {
             permissionState = .unsupportedOS(version: UIDevice.current.systemVersion)
             isInjectionEnabled = false
@@ -120,9 +125,11 @@ final class MicrophoneInjectionManager: ObservableObject {
         do {
             try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
+            lastInjectionModeChangeAt = Date()
             lastError = nil
         } catch {
             isInjectionEnabled = false
+            lastInjectionModeChangeAt = Date()
             lastError = error.localizedDescription
         }
     }
@@ -162,6 +169,7 @@ final class MicrophoneInjectionManager: ObservableObject {
         for await notification in NotificationCenter.default.notifications(named: AVAudioSession.microphoneInjectionCapabilitiesChangeNotification) {
             let available = notification.userInfo?[AVAudioSessionMicrophoneInjectionIsAvailableKey] as? Bool ?? false
             isInjectionAvailableInCurrentCall = available
+            lastCapabilitiesChangeAt = Date()
         }
     }
 

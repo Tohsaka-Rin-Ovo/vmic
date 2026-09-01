@@ -58,6 +58,16 @@ struct SettingsDrawer: View {
                             systemImage: "info.circle"
                         )
                     }
+
+                    NavigationLink {
+                        DebugDiagnosticsView()
+                    } label: {
+                        SettingsLinkRow(
+                            title: settingsStore.text(.debug),
+                            detail: settingsStore.text(.injectionChannel),
+                            systemImage: "stethoscope"
+                        )
+                    }
                 }
                 .listRowBackground(Color.clear)
             }
