@@ -2,6 +2,7 @@ import SwiftUI
 
 struct InjectionControlPanel: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -17,11 +18,11 @@ struct InjectionControlPanel: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("Call Route")
+                    Text(settingsStore.text(.callRoute))
                         .font(.headline)
                         .foregroundStyle(VmicTheme.ink)
 
-                    Text(injectionManager.permissionState.detail)
+                    Text(injectionManager.permissionState.detail(using: settingsStore))
                         .font(.subheadline)
                         .foregroundStyle(VmicTheme.mutedInk)
                         .lineLimit(2)
@@ -46,13 +47,13 @@ struct InjectionControlPanel: View {
 
             HStack(spacing: 12) {
                 StatusPill(
-                    title: injectionManager.isInjectionAvailableInCurrentCall ? "Call Detected" : "No Supported Call",
+                    title: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.callDetected) : settingsStore.text(.noSupportedCall),
                     systemImage: injectionManager.isInjectionAvailableInCurrentCall ? "phone.fill" : "phone",
                     tint: injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : VmicTheme.mutedInk
                 )
 
                 StatusPill(
-                    title: injectionManager.isInjectionEnabled ? "Injecting" : "Injection Off",
+                    title: injectionManager.isInjectionEnabled ? settingsStore.text(.injecting) : settingsStore.text(.injectionOff),
                     systemImage: injectionManager.isInjectionEnabled ? "waveform.badge.plus" : "waveform",
                     tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
                 )

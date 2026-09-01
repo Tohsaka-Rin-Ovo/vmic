@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct SoundClipButton: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
     let clip: SoundClip
     let isActive: Bool
     let play: () -> Void
@@ -24,7 +26,7 @@ struct SoundClipButton: View {
 
                     Menu {
                         Button(role: .destructive, action: delete) {
-                            Label("Delete", systemImage: "trash")
+                            Label(settingsStore.text(.delete), systemImage: "trash")
                         }
                     } label: {
                         Image(systemName: "ellipsis")
@@ -54,6 +56,6 @@ struct SoundClipButton: View {
             }
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("Play \(clip.title)")
+        .accessibilityLabel(settingsStore.text(.playSound(clip.title)))
     }
 }

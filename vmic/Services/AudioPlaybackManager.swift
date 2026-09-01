@@ -28,7 +28,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             lastError = nil
         } catch {
             activeClipIDs.remove(clip.id)
-            lastError = "Cannot play \(clip.title): \(error.localizedDescription)"
+            lastError = "无法播放 \(clip.title)：\(error.localizedDescription)"
         }
     }
 

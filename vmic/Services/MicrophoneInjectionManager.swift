@@ -12,41 +12,43 @@ enum InjectionPermissionState: Equatable {
     case granted
     case unknown
 
-    var title: String {
+    @MainActor
+    func title(using settings: AppSettingsStore) -> String {
         switch self {
         case .checking:
-            return "Checking"
+            return settings.text(.permissionChecking)
         case .unsupportedOS:
-            return "iOS 18.2 Required"
+            return settings.text(.permissionUnsupportedOS)
         case .serviceDisabled:
-            return "Add Audio in Calls Off"
+            return settings.text(.permissionServiceDisabled)
         case .undetermined:
-            return "Permission Needed"
+            return settings.text(.permissionUndetermined)
         case .denied:
-            return "Permission Denied"
+            return settings.text(.permissionDenied)
         case .granted:
-            return "Ready"
+            return settings.text(.permissionGranted)
         case .unknown:
-            return "Unknown"
+            return settings.text(.permissionUnknown)
         }
     }
 
-    var detail: String {
+    @MainActor
+    func detail(using settings: AppSettingsStore) -> String {
         switch self {
         case .checking:
-            return "vmic is checking system support."
+            return settings.text(.detailChecking)
         case .unsupportedOS(let version):
-            return "This iPhone is running iOS \(version). Microphone injection requires iOS 18.2 or later."
+            return settings.text(.detailUnsupportedOS(version))
         case .serviceDisabled:
-            return "Turn on Add Audio in Calls in Accessibility settings."
+            return settings.text(.detailServiceDisabled)
         case .undetermined:
-            return "Allow vmic to add app audio to calls."
+            return settings.text(.detailUndetermined)
         case .denied:
-            return "Permission was denied. Change it in Add Audio in Calls settings."
+            return settings.text(.detailDenied)
         case .granted:
-            return "vmic can add its audio to supported calls."
+            return settings.text(.detailGranted)
         case .unknown:
-            return "The system returned an unknown permission state."
+            return settings.text(.detailUnknown)
         }
     }
 

@@ -1,6 +1,8 @@
 import SwiftUI
 
 struct CheckingView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
     var body: some View {
         VStack(spacing: 18) {
             ZStack {
@@ -13,7 +15,7 @@ struct CheckingView: View {
                     .scaleEffect(1.25)
             }
 
-            Text("Checking vmic")
+            Text(settingsStore.text(.checking))
                 .font(.title3.weight(.semibold))
                 .foregroundStyle(VmicTheme.ink)
         }

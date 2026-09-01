@@ -66,7 +66,7 @@ final class SoundLibraryStore: ObservableObject {
             sortClips()
             lastError = nil
         } catch {
-            lastError = "Cannot import \(sourceURL.lastPathComponent): \(error.localizedDescription)"
+            lastError = "无法导入 \(sourceURL.lastPathComponent)：\(error.localizedDescription)"
         }
     }
 

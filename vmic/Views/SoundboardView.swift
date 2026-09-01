@@ -5,6 +5,7 @@ struct SoundboardView: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
 
     @State private var isImporterPresented = false
 
@@ -82,6 +83,7 @@ struct SoundboardView: View {
                     Image(systemName: "plus")
                 }
                 .buttonStyle(QuietIconButtonStyle())
+                .accessibilityLabel(settingsStore.text(.importAudio))
             }
         }
         .fileImporter(
@@ -103,23 +105,24 @@ struct SoundboardView: View {
 
 private struct PlayerHeader: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let activeClips: [SoundClip]
 
     private var title: String {
-        activeClips.first?.title ?? "Ready to bridge audio"
+        activeClips.first?.title ?? settingsStore.text(.readyToBridgeAudio)
     }
 
     private var subtitle: String {
         if activeClips.count > 1 {
-            return "\(activeClips.count) sounds playing"
+            return settingsStore.text(.soundsPlaying(activeClips.count))
         }
 
         if injectionManager.isInjectionEnabled {
-            return "Injection enabled"
+            return settingsStore.text(.injectionEnabled)
         }
 
-        return "Select a sound to play"
+        return settingsStore.text(.selectSoundToPlay)
     }
 
     var body: some View {
@@ -157,13 +160,13 @@ private struct PlayerHeader: View {
 
             HStack(spacing: 8) {
                 MiniStatus(
-                    title: injectionManager.isInjectionAvailableInCurrentCall ? "Call" : "Standby",
+                    title: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.call) : settingsStore.text(.standby),
                     systemImage: injectionManager.isInjectionAvailableInCurrentCall ? "phone.fill" : "phone",
                     tint: injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : VmicTheme.mutedInk
                 )
 
                 MiniStatus(
-                    title: injectionManager.isInjectionEnabled ? "Live" : "Local",
+                    title: injectionManager.isInjectionEnabled ? settingsStore.text(.live) : settingsStore.text(.local),
                     systemImage: injectionManager.isInjectionEnabled ? "dot.radiowaves.left.and.right" : "speaker.wave.2",
                     tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
                 )
@@ -211,6 +214,8 @@ private struct MiniStatus: View {
 }
 
 private struct EmptySoundboardView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
     let importAction: () -> Void
 
     var body: some View {
@@ -227,17 +232,17 @@ private struct EmptySoundboardView: View {
                 )
 
             VStack(spacing: 6) {
-                Text("No Sounds")
+                Text(settingsStore.text(.noSounds))
                     .font(.headline)
                     .foregroundStyle(VmicTheme.ink)
 
-                Text("Import audio files to create pads.")
+                Text(settingsStore.text(.importHint))
                     .font(.subheadline)
                     .foregroundStyle(VmicTheme.mutedInk)
             }
 
             Button(action: importAction) {
-                Label("Import Audio", systemImage: "plus")
+                Label(settingsStore.text(.importAudio), systemImage: "plus")
                     .frame(maxWidth: 220)
             }
             .buttonStyle(BlueProminentButtonStyle())
@@ -247,6 +252,8 @@ private struct EmptySoundboardView: View {
 }
 
 private struct BottomTransportBar: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
     let hasActivePlayback: Bool
     let stopAction: () -> Void
     let importAction: () -> Void
@@ -260,7 +267,7 @@ private struct BottomTransportBar: View {
             .disabled(!hasActivePlayback)
 
             Button(action: importAction) {
-                Label("Import", systemImage: "plus")
+                Label(settingsStore.text(.importShort), systemImage: "plus")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(BlueProminentButtonStyle())

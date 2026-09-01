@@ -21,6 +21,8 @@
 		5D4B60262D70000100A00001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D4B60252D70000100A00001 /* Assets.xcassets */; };
 		5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60302D70000100A00001 /* VmicTheme.swift */; };
 		5D4B60332D70000100A00001 /* CheckingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60322D70000100A00001 /* CheckingView.swift */; };
+		5D4B60352D70000100A00001 /* AppSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60342D70000100A00001 /* AppSettingsStore.swift */; };
+		5D4B60372D70000100A00001 /* SettingsDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60362D70000100A00001 /* SettingsDrawer.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -40,6 +42,8 @@
 		5D4B60272D70000100A00001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		5D4B60302D70000100A00001 /* VmicTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VmicTheme.swift; sourceTree = "<group>"; };
 		5D4B60322D70000100A00001 /* CheckingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckingView.swift; sourceTree = "<group>"; };
+		5D4B60342D70000100A00001 /* AppSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettingsStore.swift; sourceTree = "<group>"; };
+		5D4B60362D70000100A00001 /* SettingsDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDrawer.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -96,6 +100,7 @@
 				5D4B60132D70000100A00001 /* AudioPlaybackManager.swift */,
 				5D4B60152D70000100A00001 /* MicrophoneInjectionManager.swift */,
 				5D4B60172D70000100A00001 /* SoundLibraryStore.swift */,
+				5D4B60342D70000100A00001 /* AppSettingsStore.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -111,6 +116,7 @@
 				5D4B60232D70000100A00001 /* SoundClipButton.swift */,
 				5D4B60302D70000100A00001 /* VmicTheme.swift */,
 				5D4B60322D70000100A00001 /* CheckingView.swift */,
+				5D4B60362D70000100A00001 /* SettingsDrawer.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -197,6 +203,8 @@
 				5D4B60242D70000100A00001 /* SoundClipButton.swift in Sources */,
 				5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */,
 				5D4B60332D70000100A00001 /* CheckingView.swift in Sources */,
+				5D4B60352D70000100A00001 /* AppSettingsStore.swift in Sources */,
+				5D4B60372D70000100A00001 /* SettingsDrawer.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

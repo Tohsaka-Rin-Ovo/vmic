@@ -2,6 +2,7 @@ import SwiftUI
 
 struct UnsupportedOSView: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
 
     var body: some View {
         VStack(spacing: 28) {
@@ -17,12 +18,12 @@ struct UnsupportedOSView: View {
                 }
 
                 VStack(spacing: 8) {
-                    Text(injectionManager.permissionState.title)
+                    Text(injectionManager.permissionState.title(using: settingsStore))
                         .font(.title2.weight(.semibold))
                         .foregroundStyle(VmicTheme.ink)
                         .multilineTextAlignment(.center)
 
-                    Text(injectionManager.permissionState.detail)
+                    Text(injectionManager.permissionState.detail(using: settingsStore))
                         .font(.body)
                         .foregroundStyle(VmicTheme.mutedInk)
                         .multilineTextAlignment(.center)
@@ -33,7 +34,7 @@ struct UnsupportedOSView: View {
             Button {
                 injectionManager.openSoftwareUpdateSettings()
             } label: {
-                Label("Open Software Update", systemImage: "gear.badge")
+                Label(settingsStore.text(.openSoftwareUpdate), systemImage: "gear.badge")
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(BlueProminentButtonStyle())
