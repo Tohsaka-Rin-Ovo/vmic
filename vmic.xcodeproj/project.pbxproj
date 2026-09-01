@@ -1,0 +1,406 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		5D4B60102D70000100A00001 /* VmicApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B600F2D70000100A00001 /* VmicApp.swift */; };
+		5D4B60122D70000100A00001 /* SoundClip.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60112D70000100A00001 /* SoundClip.swift */; };
+		5D4B60142D70000100A00001 /* AudioPlaybackManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60132D70000100A00001 /* AudioPlaybackManager.swift */; };
+		5D4B60162D70000100A00001 /* MicrophoneInjectionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60152D70000100A00001 /* MicrophoneInjectionManager.swift */; };
+		5D4B60182D70000100A00001 /* SoundLibraryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60172D70000100A00001 /* SoundLibraryStore.swift */; };
+		5D4B601A2D70000100A00001 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60192D70000100A00001 /* ContentView.swift */; };
+		5D4B601C2D70000100A00001 /* SetupGateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B601B2D70000100A00001 /* SetupGateView.swift */; };
+		5D4B601E2D70000100A00001 /* UnsupportedOSView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */; };
+		5D4B60202D70000100A00001 /* SoundboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B601F2D70000100A00001 /* SoundboardView.swift */; };
+		5D4B60222D70000100A00001 /* InjectionControlPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60212D70000100A00001 /* InjectionControlPanel.swift */; };
+		5D4B60242D70000100A00001 /* SoundClipButton.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60232D70000100A00001 /* SoundClipButton.swift */; };
+		5D4B60262D70000100A00001 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 5D4B60252D70000100A00001 /* Assets.xcassets */; };
+		5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60302D70000100A00001 /* VmicTheme.swift */; };
+		5D4B60332D70000100A00001 /* CheckingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60322D70000100A00001 /* CheckingView.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXFileReference section */
+		5D4B600A2D70000100A00001 /* vmic.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = vmic.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5D4B600F2D70000100A00001 /* VmicApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VmicApp.swift; sourceTree = "<group>"; };
+		5D4B60112D70000100A00001 /* SoundClip.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundClip.swift; sourceTree = "<group>"; };
+		5D4B60132D70000100A00001 /* AudioPlaybackManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AudioPlaybackManager.swift; sourceTree = "<group>"; };
+		5D4B60152D70000100A00001 /* MicrophoneInjectionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MicrophoneInjectionManager.swift; sourceTree = "<group>"; };
+		5D4B60172D70000100A00001 /* SoundLibraryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundLibraryStore.swift; sourceTree = "<group>"; };
+		5D4B60192D70000100A00001 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		5D4B601B2D70000100A00001 /* SetupGateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SetupGateView.swift; sourceTree = "<group>"; };
+		5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UnsupportedOSView.swift; sourceTree = "<group>"; };
+		5D4B601F2D70000100A00001 /* SoundboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundboardView.swift; sourceTree = "<group>"; };
+		5D4B60212D70000100A00001 /* InjectionControlPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InjectionControlPanel.swift; sourceTree = "<group>"; };
+		5D4B60232D70000100A00001 /* SoundClipButton.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SoundClipButton.swift; sourceTree = "<group>"; };
+		5D4B60252D70000100A00001 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		5D4B60272D70000100A00001 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		5D4B60302D70000100A00001 /* VmicTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VmicTheme.swift; sourceTree = "<group>"; };
+		5D4B60322D70000100A00001 /* CheckingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CheckingView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		5D4B60072D70000100A00001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		5D4B60012D70000100A00001 = {
+			isa = PBXGroup;
+			children = (
+				5D4B600B2D70000100A00001 /* vmic */,
+				5D4B600C2D70000100A00001 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		5D4B600B2D70000100A00001 /* vmic */ = {
+			isa = PBXGroup;
+			children = (
+				5D4B600F2D70000100A00001 /* VmicApp.swift */,
+				5D4B602B2D70000100A00001 /* Models */,
+				5D4B602C2D70000100A00001 /* Services */,
+				5D4B602D2D70000100A00001 /* Views */,
+				5D4B60252D70000100A00001 /* Assets.xcassets */,
+				5D4B60272D70000100A00001 /* Info.plist */,
+			);
+			path = vmic;
+			sourceTree = "<group>";
+		};
+		5D4B600C2D70000100A00001 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				5D4B600A2D70000100A00001 /* vmic.app */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		5D4B602B2D70000100A00001 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				5D4B60112D70000100A00001 /* SoundClip.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		5D4B602C2D70000100A00001 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				5D4B60132D70000100A00001 /* AudioPlaybackManager.swift */,
+				5D4B60152D70000100A00001 /* MicrophoneInjectionManager.swift */,
+				5D4B60172D70000100A00001 /* SoundLibraryStore.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		5D4B602D2D70000100A00001 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				5D4B60192D70000100A00001 /* ContentView.swift */,
+				5D4B601B2D70000100A00001 /* SetupGateView.swift */,
+				5D4B601D2D70000100A00001 /* UnsupportedOSView.swift */,
+				5D4B601F2D70000100A00001 /* SoundboardView.swift */,
+				5D4B60212D70000100A00001 /* InjectionControlPanel.swift */,
+				5D4B60232D70000100A00001 /* SoundClipButton.swift */,
+				5D4B60302D70000100A00001 /* VmicTheme.swift */,
+				5D4B60322D70000100A00001 /* CheckingView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		5D4B60092D70000100A00001 /* vmic */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5D4B602A2D70000100A00001 /* Build configuration list for PBXNativeTarget "vmic" */;
+			buildPhases = (
+				5D4B60062D70000100A00001 /* Sources */,
+				5D4B60072D70000100A00001 /* Frameworks */,
+				5D4B60082D70000100A00001 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = vmic;
+			productName = vmic;
+			productReference = 5D4B600A2D70000100A00001 /* vmic.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		5D4B60022D70000100A00001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1620;
+				LastUpgradeCheck = 1620;
+				TargetAttributes = {
+					5D4B60092D70000100A00001 = {
+						CreatedOnToolsVersion = 16.2;
+					};
+				};
+			};
+			buildConfigurationList = 5D4B60052D70000100A00001 /* Build configuration list for PBXProject "vmic" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 5D4B60012D70000100A00001;
+			productRefGroup = 5D4B600C2D70000100A00001 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				5D4B60092D70000100A00001 /* vmic */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		5D4B60082D70000100A00001 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5D4B60262D70000100A00001 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5D4B60062D70000100A00001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				5D4B60102D70000100A00001 /* VmicApp.swift in Sources */,
+				5D4B60122D70000100A00001 /* SoundClip.swift in Sources */,
+				5D4B60142D70000100A00001 /* AudioPlaybackManager.swift in Sources */,
+				5D4B60162D70000100A00001 /* MicrophoneInjectionManager.swift in Sources */,
+				5D4B60182D70000100A00001 /* SoundLibraryStore.swift in Sources */,
+				5D4B601A2D70000100A00001 /* ContentView.swift in Sources */,
+				5D4B601C2D70000100A00001 /* SetupGateView.swift in Sources */,
+				5D4B601E2D70000100A00001 /* UnsupportedOSView.swift in Sources */,
+				5D4B60202D70000100A00001 /* SoundboardView.swift in Sources */,
+				5D4B60222D70000100A00001 /* InjectionControlPanel.swift in Sources */,
+				5D4B60242D70000100A00001 /* SoundClipButton.swift in Sources */,
+				5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */,
+				5D4B60332D70000100A00001 /* CheckingView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		5D4B60282D70000100A00001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		5D4B60292D70000100A00001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		5D4B602E2D70000100A00001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = vmic/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.vmic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		5D4B602F2D70000100A00001 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_ASSET_PATHS = "";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = vmic/Info.plist;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.vmic;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		5D4B60052D70000100A00001 /* Build configuration list for PBXProject "vmic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5D4B60282D70000100A00001 /* Debug */,
+				5D4B60292D70000100A00001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		5D4B602A2D70000100A00001 /* Build configuration list for PBXNativeTarget "vmic" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5D4B602E2D70000100A00001 /* Debug */,
+				5D4B602F2D70000100A00001 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 5D4B60022D70000100A00001 /* Project object */;
+}

@@ -1,0 +1,181 @@
+import AVFAudio
+import Accessibility
+import Foundation
+import UIKit
+
+enum InjectionPermissionState: Equatable {
+    case checking
+    case unsupportedOS(version: String)
+    case serviceDisabled
+    case undetermined
+    case denied
+    case granted
+    case unknown
+
+    var title: String {
+        switch self {
+        case .checking:
+            return "Checking"
+        case .unsupportedOS:
+            return "iOS 18.2 Required"
+        case .serviceDisabled:
+            return "Add Audio in Calls Off"
+        case .undetermined:
+            return "Permission Needed"
+        case .denied:
+            return "Permission Denied"
+        case .granted:
+            return "Ready"
+        case .unknown:
+            return "Unknown"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .checking:
+            return "vmic is checking system support."
+        case .unsupportedOS(let version):
+            return "This iPhone is running iOS \(version). Microphone injection requires iOS 18.2 or later."
+        case .serviceDisabled:
+            return "Turn on Add Audio in Calls in Accessibility settings."
+        case .undetermined:
+            return "Allow vmic to add app audio to calls."
+        case .denied:
+            return "Permission was denied. Change it in Add Audio in Calls settings."
+        case .granted:
+            return "vmic can add its audio to supported calls."
+        case .unknown:
+            return "The system returned an unknown permission state."
+        }
+    }
+
+    var canRequestPermission: Bool {
+        self == .undetermined
+    }
+
+    var canEnableInjection: Bool {
+        self == .granted
+    }
+}
+
+@MainActor
+final class MicrophoneInjectionManager: ObservableObject {
+    @Published private(set) var permissionState: InjectionPermissionState = .checking
+    @Published private(set) var isInjectionEnabled = false
+    @Published private(set) var isInjectionAvailableInCurrentCall = false
+    @Published var lastError: String?
+
+    private var observerTask: Task<Void, Never>?
+
+    init() {
+        observerTask = Task { [weak self] in
+            await self?.observeCapabilities()
+        }
+    }
+
+    deinit {
+        observerTask?.cancel()
+    }
+
+    func refresh() async {
+        guard #available(iOS 18.2, *) else {
+            permissionState = .unsupportedOS(version: UIDevice.current.systemVersion)
+            isInjectionEnabled = false
+            isInjectionAvailableInCurrentCall = false
+            return
+        }
+
+        permissionState = Self.map(AVAudioApplication.shared.microphoneInjectionPermission)
+    }
+
+    func requestPermission() async {
+        guard #available(iOS 18.2, *) else {
+            await refresh()
+            return
+        }
+
+        let result = await withCheckedContinuation { continuation in
+            AVAudioApplication.requestMicrophoneInjectionPermission { permission in
+                continuation.resume(returning: permission)
+            }
+        }
+
+        permissionState = Self.map(result)
+    }
+
+    func setInjectionEnabled(_ enabled: Bool) async {
+        guard #available(iOS 18.2, *) else {
+            await refresh()
+            return
+        }
+
+        guard permissionState.canEnableInjection else {
+            isInjectionEnabled = false
+            return
+        }
+
+        do {
+            try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
+            isInjectionEnabled = enabled
+            lastError = nil
+        } catch {
+            isInjectionEnabled = false
+            lastError = error.localizedDescription
+        }
+    }
+
+    func openAddAudioInCallsSettings() async {
+        guard #available(iOS 18.2, *) else {
+            openAppSettings()
+            return
+        }
+
+        do {
+            try await AccessibilitySettings.openSettings(for: .allowAppsToAddAudioToCalls)
+        } catch {
+            lastError = error.localizedDescription
+            openAppSettings()
+        }
+    }
+
+    func openSoftwareUpdateSettings() {
+        // This deep link is intended for personal builds. Apple does not provide
+        // a fully stable public URL for the Software Update screen.
+        if let url = URL(string: "App-prefs:General&path=SOFTWARE_UPDATE_LINK") {
+            UIApplication.shared.open(url)
+        } else {
+            openAppSettings()
+        }
+    }
+
+    private func openAppSettings() {
+        guard let url = URL(string: UIApplication.openSettingsURLString) else { return }
+        UIApplication.shared.open(url)
+    }
+
+    private func observeCapabilities() async {
+        guard #available(iOS 18.2, *) else { return }
+
+        for await notification in NotificationCenter.default.notifications(named: AVAudioSession.microphoneInjectionCapabilitiesChangeNotification) {
+            let available = notification.userInfo?[AVAudioSessionMicrophoneInjectionIsAvailableKey] as? Bool ?? false
+            isInjectionAvailableInCurrentCall = available
+        }
+    }
+
+    @available(iOS 18.2, *)
+    private static func map(_ permission: AVAudioApplication.MicrophoneInjectionPermission) -> InjectionPermissionState {
+        switch permission {
+        case .serviceDisabled:
+            return .serviceDisabled
+        case .undetermined:
+            return .undetermined
+        case .denied:
+            return .denied
+        case .granted:
+            return .granted
+        @unknown default:
+            return .unknown
+        }
+    }
+}
