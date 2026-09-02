@@ -102,6 +102,7 @@ extension UINavigationBar {
         let appearance = UINavigationBarAppearance()
         appearance.configureWithOpaqueBackground()
         appearance.backgroundColor = VmicTheme.navigationBarUIColor
+        appearance.backgroundEffect = nil
         appearance.shadowColor = .clear
         appearance.shadowImage = UIImage()
 
@@ -118,12 +119,15 @@ extension UINavigationBar {
         navigationBar.compactAppearance = appearance
         navigationBar.scrollEdgeAppearance = appearance
         navigationBar.compactScrollEdgeAppearance = appearance
+        navigationBar.barTintColor = VmicTheme.navigationBarUIColor
+        navigationBar.backgroundColor = VmicTheme.navigationBarUIColor
+        navigationBar.shadowImage = UIImage()
+        navigationBar.isTranslucent = false
     }
 }
 
 extension View {
     func vmicOpaqueNavigationBar() -> some View {
-        toolbarBackground(VmicTheme.navigationBarBackground, for: .navigationBar)
-            .toolbarBackground(.visible, for: .navigationBar)
+        self
     }
 }

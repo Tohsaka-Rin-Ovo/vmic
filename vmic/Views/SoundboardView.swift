@@ -53,6 +53,7 @@ struct SoundboardView: View {
                             .listRowBackground(Color.clear)
                     }
                 }
+                .listSectionSeparator(.hidden)
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
@@ -232,6 +233,7 @@ private struct AudioLibraryView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
                     }
+                    .listSectionSeparator(.hidden)
                 } else {
                     Section {
                         ForEach(libraryStore.clips) { clip in
@@ -262,6 +264,7 @@ private struct AudioLibraryView: View {
                         }
                         .onMove(perform: libraryStore.move)
                     }
+                    .listSectionSeparator(.hidden)
                 }
             }
             .environment(\.editMode, $editMode)
