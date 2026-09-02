@@ -1,3 +1,4 @@
+import AVFAudio
 import SwiftUI
 import UIKit
 
@@ -32,9 +33,13 @@ enum DebugFocusTarget: Hashable, Identifiable {
 
 struct DebugDiagnosticsView: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var libraryStore: SoundLibraryStore
+    @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let initialFocus: DebugFocusTarget?
+
+    @StateObject private var monitorExperiment = MonitorVolumeExperimentManager()
 
     @State private var runningAction: DiagnosticAction?
     @State private var didCopyDiagnostics = false
@@ -72,6 +77,15 @@ struct DebugDiagnosticsView: View {
         return VmicTheme.mutedInk
     }
 
+    private var experimentClip: SoundClip? {
+        if let currentClipID = playbackManager.currentClipID,
+           let clip = libraryStore.clips.first(where: { $0.id == currentClipID }) {
+            return clip
+        }
+
+        return libraryStore.clips.first
+    }
+
     var body: some View {
         ScrollViewReader { proxy in
             ScrollView {
@@ -106,6 +120,13 @@ struct DebugDiagnosticsView: View {
                         }
                     )
                     .id(DebugFocusTarget.injectionSwitch)
+
+                    MonitorVolumeExperimentCard(
+                        clip: experimentClip,
+                        soundsDirectory: libraryStore.soundsDirectory,
+                        experimentManager: monitorExperiment,
+                        prepareForExperiment: prepareForMonitorExperiment
+                    )
 
                     DebugResultCard()
 
@@ -144,6 +165,16 @@ struct DebugDiagnosticsView: View {
                 highlightedFocus = nil
             }
         }
+    }
+
+    private func prepareForMonitorExperiment() async {
+        playbackManager.stopAll()
+
+        if !injectionManager.isInjectionEnabled, injectionManager.permissionState.canEnableInjection {
+            _ = await injectionManager.setInjectionEnabled(true)
+        }
+
+        injectionManager.refreshAudioSessionDiagnostics(printToConsole: true)
     }
 
     private func copyDiagnostics() {
@@ -426,6 +457,416 @@ private struct DebugSwitchCard: View {
             .disabled(isBusy)
             .padding(.top, 4)
         }
+    }
+}
+
+private struct MonitorVolumeExperimentCard: View {
+    @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let clip: SoundClip?
+    let soundsDirectory: URL
+    @ObservedObject var experimentManager: MonitorVolumeExperimentManager
+    let prepareForExperiment: () async -> Void
+
+    private var channelTint: Color {
+        injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : Color(red: 0.88, green: 0.58, blue: 0.12)
+    }
+
+    private var switchTint: Color {
+        injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
+    }
+
+    var body: some View {
+        DebugCard(
+            title: settingsStore.text(.monitorVolumeExperiment),
+            subtitle: settingsStore.text(.monitorVolumeExperimentDetail),
+            systemImage: "ear",
+            tint: VmicTheme.cyan
+        ) {
+            if let clip {
+                DebugInfoRow(title: settingsStore.text(.experimentAudio), value: clip.title)
+            } else {
+                DebugInfoRow(title: settingsStore.text(.experimentAudio), value: settingsStore.text(.experimentNoAudio))
+            }
+
+            HStack(spacing: 0) {
+                DebugMetric(
+                    title: settingsStore.text(.injectionChannel),
+                    value: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.available) : settingsStore.text(.unavailable),
+                    tint: channelTint
+                )
+
+                DebugMetricDivider()
+
+                DebugMetric(
+                    title: settingsStore.text(.injectionSwitch),
+                    value: injectionManager.isInjectionEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
+                    tint: switchTint
+                )
+            }
+
+            ExperimentVolumeSlider(
+                title: settingsStore.text(.localMonitorVolume),
+                systemImage: "headphones",
+                value: $experimentManager.localMonitorVolume,
+                isDisabled: experimentManager.status == .running(.mutedMonitor)
+            )
+
+            ExperimentVolumeSlider(
+                title: settingsStore.text(.bridgeSendVolume),
+                systemImage: "waveform.badge.plus",
+                value: $experimentManager.bridgeSendVolume
+            )
+
+            HStack(spacing: 10) {
+                Button {
+                    startBaseline()
+                } label: {
+                    DiagnosticActionLabel(
+                        title: settingsStore.text(.baselineTest),
+                        systemImage: "speaker.wave.2",
+                        isRunning: experimentManager.status == .running(.baseline)
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle())
+                .disabled(clip == nil || experimentManager.isRunning || injectionManager.isChangingInjectionMode)
+
+                Button {
+                    startMutedMonitor()
+                } label: {
+                    DiagnosticActionLabel(
+                        title: settingsStore.text(.mutedMonitorTest),
+                        systemImage: "speaker.slash",
+                        isRunning: experimentManager.status == .running(.mutedMonitor)
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.cyan))
+                .disabled(clip == nil || experimentManager.isRunning || injectionManager.isChangingInjectionMode)
+            }
+            .padding(.top, 4)
+
+            Button {
+                experimentManager.stop()
+            } label: {
+                DiagnosticActionLabel(
+                    title: settingsStore.text(.stopTest),
+                    systemImage: "stop.fill",
+                    isRunning: false
+                )
+            }
+            .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.mutedInk))
+            .disabled(!experimentManager.isRunning)
+
+            ExperimentStatusBanner(status: experimentManager.status)
+
+            Text(settingsStore.text(.experimentInstruction))
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func startBaseline() {
+        guard let clip else { return }
+
+        Task {
+            await prepareForExperiment()
+            await MainActor.run {
+                experimentManager.playBaseline(clip, from: soundsDirectory)
+            }
+        }
+    }
+
+    private func startMutedMonitor() {
+        guard let clip else { return }
+
+        Task {
+            await prepareForExperiment()
+            await MainActor.run {
+                experimentManager.playMutedMonitor(clip, from: soundsDirectory)
+            }
+        }
+    }
+}
+
+private struct ExperimentVolumeSlider: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let title: String
+    let systemImage: String
+    @Binding var value: Double
+    var isDisabled = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((value * 100).rounded()))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $value, in: 0...1)
+                .tint(VmicTheme.blue)
+                .disabled(isDisabled)
+        }
+        .padding(12)
+        .background(VmicTheme.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .opacity(isDisabled ? 0.62 : 1)
+    }
+}
+
+private struct ExperimentStatusBanner: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let status: MonitorVolumeExperimentStatus
+
+    private var tint: Color {
+        switch status {
+        case .idle, .stopped:
+            return VmicTheme.mutedInk
+        case .running:
+            return VmicTheme.blue
+        case .finished:
+            return VmicTheme.mint
+        case .failed:
+            return Color(red: 0.82, green: 0.20, blue: 0.18)
+        }
+    }
+
+    private var systemImage: String {
+        switch status {
+        case .idle:
+            return "checkmark.circle"
+        case .running:
+            return "waveform"
+        case .finished:
+            return "checkmark.circle.fill"
+        case .stopped:
+            return "stop.circle"
+        case .failed:
+            return "xmark.circle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 22, height: 22)
+
+            Text(statusText)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(VmicTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var statusText: String {
+        switch status {
+        case .idle:
+            return settingsStore.text(.experimentReady)
+        case .running(.baseline):
+            return settingsStore.text(.experimentBaselineRunning)
+        case .running(.mutedMonitor):
+            return settingsStore.text(.experimentMutedMonitorRunning)
+        case .finished(.baseline):
+            return settingsStore.text(.experimentBaselineFinished)
+        case .finished(.mutedMonitor):
+            return settingsStore.text(.experimentMutedMonitorFinished)
+        case .stopped:
+            return settingsStore.text(.experimentStopped)
+        case .failed(let message):
+            return settingsStore.text(.experimentFailed(message))
+        }
+    }
+}
+
+private enum MonitorVolumeExperimentKind: Equatable {
+    case baseline
+    case mutedMonitor
+}
+
+private enum MonitorVolumeExperimentStatus: Equatable {
+    case idle
+    case running(MonitorVolumeExperimentKind)
+    case finished(MonitorVolumeExperimentKind)
+    case stopped
+    case failed(String)
+}
+
+@MainActor
+private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
+    private static let maximumTestDuration: TimeInterval = 12
+
+    @Published var localMonitorVolume: Double = 1 {
+        didSet {
+            updateVolumes()
+        }
+    }
+    @Published var bridgeSendVolume: Double = 1 {
+        didSet {
+            updateVolumes()
+        }
+    }
+    @Published private(set) var status: MonitorVolumeExperimentStatus = .idle
+
+    private var engine: AVAudioEngine?
+    private var localPlayerNode: AVAudioPlayerNode?
+    private var bridgePlayerNode: AVAudioPlayerNode?
+    private var silentBridgeMixer: AVAudioMixerNode?
+    private var localAudioFile: AVAudioFile?
+    private var bridgeAudioFile: AVAudioFile?
+    private var finishTask: Task<Void, Never>?
+
+    var isRunning: Bool {
+        if case .running = status {
+            return true
+        }
+
+        return false
+    }
+
+    func playBaseline(_ clip: SoundClip, from directory: URL) {
+        localMonitorVolume = 1
+        bridgeSendVolume = 1
+        play(clip, from: directory, kind: .baseline)
+    }
+
+    func playMutedMonitor(_ clip: SoundClip, from directory: URL) {
+        localMonitorVolume = 0
+        bridgeSendVolume = 1
+        play(clip, from: directory, kind: .mutedMonitor)
+    }
+
+    func stop() {
+        stopEngineOnly()
+        status = .stopped
+    }
+
+    private func play(
+        _ clip: SoundClip,
+        from directory: URL,
+        kind: MonitorVolumeExperimentKind
+    ) {
+        let url = clip.fileURL(in: directory)
+
+        do {
+            stopEngineOnly()
+
+            let localAudioFile = try AVAudioFile(forReading: url)
+            let bridgeAudioFile = try AVAudioFile(forReading: url)
+            let engine = AVAudioEngine()
+            let localPlayerNode = AVAudioPlayerNode()
+            let bridgePlayerNode = AVAudioPlayerNode()
+            let silentBridgeMixer = AVAudioMixerNode()
+            let format = localAudioFile.processingFormat
+
+            engine.attach(localPlayerNode)
+            engine.attach(bridgePlayerNode)
+            engine.attach(silentBridgeMixer)
+            engine.connect(localPlayerNode, to: engine.mainMixerNode, format: format)
+            engine.connect(bridgePlayerNode, to: silentBridgeMixer, format: format)
+            engine.connect(silentBridgeMixer, to: engine.mainMixerNode, format: format)
+
+            localPlayerNode.volume = Float(clamped(localMonitorVolume))
+            bridgePlayerNode.volume = Float(clamped(bridgeSendVolume))
+            silentBridgeMixer.outputVolume = 0
+
+            let frameCount = frameCount(for: localAudioFile)
+            localPlayerNode.scheduleSegment(localAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
+            bridgePlayerNode.scheduleSegment(bridgeAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
+
+            try configureAudioSession()
+            try engine.start()
+
+            self.engine = engine
+            self.localPlayerNode = localPlayerNode
+            self.bridgePlayerNode = bridgePlayerNode
+            self.silentBridgeMixer = silentBridgeMixer
+            self.localAudioFile = localAudioFile
+            self.bridgeAudioFile = bridgeAudioFile
+            status = .running(kind)
+
+            localPlayerNode.play()
+            bridgePlayerNode.play()
+            scheduleFinish(frameCount: frameCount, sampleRate: format.sampleRate, kind: kind)
+        } catch {
+            stopEngineOnly()
+            status = .failed(error.localizedDescription)
+        }
+    }
+
+    private func updateVolumes() {
+        guard isRunning else { return }
+
+        if case .running(.mutedMonitor) = status {
+            localPlayerNode?.volume = 0
+        } else {
+            localPlayerNode?.volume = Float(clamped(localMonitorVolume))
+        }
+
+        bridgePlayerNode?.volume = Float(clamped(bridgeSendVolume))
+    }
+
+    private func frameCount(for audioFile: AVAudioFile) -> AVAudioFrameCount {
+        let maximumFrames = AVAudioFramePosition(audioFile.processingFormat.sampleRate * Self.maximumTestDuration)
+        let selectedFrames = max(1, min(audioFile.length, maximumFrames))
+
+        return AVAudioFrameCount(selectedFrames)
+    }
+
+    private func scheduleFinish(frameCount: AVAudioFrameCount, sampleRate: Double, kind: MonitorVolumeExperimentKind) {
+        finishTask?.cancel()
+
+        let duration = sampleRate > 0 ? Double(frameCount) / sampleRate : 0
+        let wait = UInt64(max(duration + 0.2, 0.5) * 1_000_000_000)
+
+        finishTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: wait)
+
+            await MainActor.run {
+                guard let self, self.status == .running(kind) else { return }
+
+                self.stopEngineOnly()
+                self.status = .finished(kind)
+            }
+        }
+    }
+
+    private func stopEngineOnly() {
+        finishTask?.cancel()
+        finishTask = nil
+        localPlayerNode?.stop()
+        bridgePlayerNode?.stop()
+        engine?.stop()
+        engine = nil
+        localPlayerNode = nil
+        bridgePlayerNode = nil
+        silentBridgeMixer = nil
+        localAudioFile = nil
+        bridgeAudioFile = nil
+    }
+
+    private func configureAudioSession() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        try session.setActive(true)
+    }
+
+    private func clamped(_ value: Double) -> Double {
+        min(max(value, 0), 1)
     }
 }
 

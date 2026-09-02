@@ -45,6 +45,23 @@ enum VmicText {
     case language
     case about
     case debug
+    case monitorVolumeExperiment
+    case monitorVolumeExperimentDetail
+    case experimentAudio
+    case experimentNoAudio
+    case localMonitorVolume
+    case bridgeSendVolume
+    case baselineTest
+    case mutedMonitorTest
+    case stopTest
+    case experimentInstruction
+    case experimentReady
+    case experimentBaselineRunning
+    case experimentMutedMonitorRunning
+    case experimentBaselineFinished
+    case experimentMutedMonitorFinished
+    case experimentStopped
+    case experimentFailed(String)
     case themeSystem
     case themeLight
     case themeDark
@@ -250,6 +267,40 @@ final class AppSettingsStore: ObservableObject {
             return "关于"
         case .debug:
             return "调试"
+        case .monitorVolumeExperiment:
+            return "监听验证"
+        case .monitorVolumeExperimentDetail:
+            return "验证本机监听音量能否与桥接发送音量分离。"
+        case .experimentAudio:
+            return "测试音频"
+        case .experimentNoAudio:
+            return "请先在音频列表导入一个音频。"
+        case .localMonitorVolume:
+            return "本机监听音量"
+        case .bridgeSendVolume:
+            return "桥接发送音量"
+        case .baselineTest:
+            return "基线播放"
+        case .mutedMonitorTest:
+            return "静音监听"
+        case .stopTest:
+            return "停止测试"
+        case .experimentInstruction:
+            return "测试时保持通话，先运行基线播放确认对方能听到，再运行静音监听。如果本机无声但对方仍能听到，说明监听分离有机会正式接入。"
+        case .experimentReady:
+            return "等待开始测试。"
+        case .experimentBaselineRunning:
+            return "基线播放中：本机监听为 100%，用于确认当前注入链路有效。"
+        case .experimentMutedMonitorRunning:
+            return "静音监听中：本机监听为 0%，桥接发送按滑块输出。"
+        case .experimentBaselineFinished:
+            return "基线播放已结束。"
+        case .experimentMutedMonitorFinished:
+            return "静音监听已结束，请记录对方是否仍能听到。"
+        case .experimentStopped:
+            return "测试已停止。"
+        case .experimentFailed(let message):
+            return "测试失败：\(message)"
         case .themeSystem:
             return "跟随系统"
         case .themeLight:
@@ -531,6 +582,40 @@ final class AppSettingsStore: ObservableObject {
             return "About"
         case .debug:
             return "Debug"
+        case .monitorVolumeExperiment:
+            return "Monitor Check"
+        case .monitorVolumeExperimentDetail:
+            return "Checks whether local monitoring can be separated from bridge send volume."
+        case .experimentAudio:
+            return "Test Audio"
+        case .experimentNoAudio:
+            return "Import an audio file in the audio list first."
+        case .localMonitorVolume:
+            return "Local Monitor"
+        case .bridgeSendVolume:
+            return "Bridge Send"
+        case .baselineTest:
+            return "Baseline"
+        case .mutedMonitorTest:
+            return "Muted Monitor"
+        case .stopTest:
+            return "Stop Test"
+        case .experimentInstruction:
+            return "Stay in the call, run Baseline first to confirm the other side can hear it, then run Muted Monitor. If this iPhone is silent but the other side still hears audio, monitor separation is worth promoting to the main UI."
+        case .experimentReady:
+            return "Waiting to start."
+        case .experimentBaselineRunning:
+            return "Baseline is playing with local monitor at 100%."
+        case .experimentMutedMonitorRunning:
+            return "Muted Monitor is playing with local monitor at 0% and bridge send controlled by the slider."
+        case .experimentBaselineFinished:
+            return "Baseline finished."
+        case .experimentMutedMonitorFinished:
+            return "Muted Monitor finished. Record whether the other side still heard it."
+        case .experimentStopped:
+            return "Test stopped."
+        case .experimentFailed(let message):
+            return "Test failed: \(message)"
         case .themeSystem:
             return "System"
         case .themeLight:
