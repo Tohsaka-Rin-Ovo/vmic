@@ -84,6 +84,8 @@ struct InjectionControlPanel: View {
                 )
             }
 
+            InputVolumeControl()
+
             Text(diagnosticText)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(VmicTheme.mutedInk)
@@ -119,6 +121,32 @@ struct InjectionControlPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.72), lineWidth: 1)
         }
+    }
+}
+
+private struct InputVolumeControl: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label(settingsStore.text(.inputVolume), systemImage: "speaker.wave.2")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((settingsStore.inputVolume * 100).rounded()))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $settingsStore.inputVolume, in: 0...1)
+                .tint(VmicTheme.blue)
+        }
+        .padding(12)
+        .background(VmicTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

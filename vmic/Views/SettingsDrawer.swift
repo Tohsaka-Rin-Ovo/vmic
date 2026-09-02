@@ -223,6 +223,8 @@ private struct PlaybackSettingsView: View {
     var body: some View {
         List {
             Section {
+                SettingsVolumeRow()
+
                 SettingsToggleRow(
                     title: settingsStore.text(.singlePlayback),
                     detail: settingsStore.text(.singlePlaybackDetail),
@@ -335,6 +337,36 @@ private struct SettingsLinkRow: View {
                 .font(.footnote.weight(.semibold))
                 .foregroundStyle(VmicTheme.mutedInk.opacity(0.62))
         }
+    }
+}
+
+private struct SettingsVolumeRow: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text(settingsStore.text(.inputVolume))
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((settingsStore.inputVolume * 100).rounded()))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $settingsStore.inputVolume, in: 0...1)
+                .tint(VmicTheme.blue)
+
+            Text(settingsStore.text(.inputVolumeDetail))
+                .font(.caption)
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.vertical, 5)
     }
 }
 

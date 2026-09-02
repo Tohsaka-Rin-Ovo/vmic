@@ -20,6 +20,15 @@ struct SoundboardView: View {
         }
     }
 
+    private var currentClip: SoundClip? {
+        if let currentClipID = playbackManager.currentClipID,
+           let clip = libraryStore.clips.first(where: { $0.id == currentClipID }) {
+            return clip
+        }
+
+        return activeClips.first
+    }
+
     var body: some View {
         ZStack {
             VmicTheme.appBackground
@@ -59,9 +68,9 @@ struct SoundboardView: View {
                             AudioListRow(
                                 clip: clip,
                                 artworkDirectory: libraryStore.artworkDirectory,
-                                isActive: playbackManager.activeClipIDs.contains(clip.id),
+                                playbackState: playbackManager.playbackState(for: clip.id),
                                 play: {
-                                    play(clip)
+                                    togglePlayback(clip)
                                 },
                                 rename: {
                                     clipBeingRenamed = clip
@@ -88,15 +97,21 @@ struct SoundboardView: View {
             .environment(\.editMode, $editMode)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .padding(.bottom, libraryStore.clips.isEmpty ? 0 : 78)
+            .padding(.bottom, currentClip == nil ? 0 : 84)
 
-            if !libraryStore.clips.isEmpty {
+            if let currentClip {
                 VStack {
                     Spacer()
-                    BottomTransportBar(
-                        hasActivePlayback: !playbackManager.activeClipIDs.isEmpty,
+                    BottomNowPlayingBar(
+                        clip: currentClip,
+                        artworkDirectory: libraryStore.artworkDirectory,
+                        playbackState: playbackManager.playbackState(for: currentClip.id),
+                        volume: $settingsStore.inputVolume,
+                        togglePlayback: {
+                            togglePlayback(currentClip)
+                        },
                         stopAction: {
-                            playbackManager.stopAll()
+                            playbackManager.stop(currentClip)
                         },
                         importAction: {
                             isImporterPresented = true
@@ -126,6 +141,12 @@ struct SoundboardView: View {
                 }
             }
         }
+        .task {
+            playbackManager.setOutputVolume(settingsStore.inputVolume)
+        }
+        .onChange(of: settingsStore.inputVolume) { _, newValue in
+            playbackManager.setOutputVolume(newValue)
+        }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -149,7 +170,7 @@ struct SoundboardView: View {
         }
         .fileImporter(
             isPresented: $isImporterPresented,
-            allowedContentTypes: [.audio],
+            allowedContentTypes: [.audio, .movie],
             allowsMultipleSelection: true
         ) { result in
             switch result {
@@ -189,18 +210,19 @@ struct SoundboardView: View {
         }
     }
 
-    private func play(_ clip: SoundClip) {
-        if settingsStore.singlePlayback {
+    private func togglePlayback(_ clip: SoundClip) {
+        if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
             playbackManager.stopAll()
         }
 
-        playbackManager.play(clip, from: libraryStore.soundsDirectory)
+        playbackManager.toggle(clip, from: libraryStore.soundsDirectory, volume: settingsStore.inputVolume)
     }
 }
 
 private struct PlayerHeader: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var libraryStore: SoundLibraryStore
+    @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let activeClips: [SoundClip]
@@ -221,6 +243,11 @@ private struct PlayerHeader: View {
         return settingsStore.text(.selectSoundToPlay)
     }
 
+    private var isTitlePlaying: Bool {
+        guard let clip = activeClips.first else { return false }
+        return playbackManager.playbackState(for: clip.id) == .playing
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 18) {
@@ -230,11 +257,13 @@ private struct PlayerHeader: View {
                 )
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text(title)
-                        .font(.title2.weight(.bold))
-                        .foregroundStyle(VmicTheme.ink)
-                        .lineLimit(2)
-                        .minimumScaleFactor(0.82)
+                    MarqueeText(
+                        title,
+                        font: .title2.weight(.bold),
+                        color: VmicTheme.ink,
+                        isActive: isTitlePlaying
+                    )
+                    .frame(height: 34, alignment: .center)
 
                     Text(subtitle)
                         .font(.subheadline.weight(.medium))
@@ -273,10 +302,18 @@ private struct AudioListRow: View {
 
     let clip: SoundClip
     let artworkDirectory: URL
-    let isActive: Bool
+    let playbackState: SoundPlaybackState?
     let play: () -> Void
     let rename: () -> Void
     let remove: () -> Void
+
+    private var isActive: Bool {
+        playbackState != nil
+    }
+
+    private var isPlaying: Bool {
+        playbackState == .playing
+    }
 
     var body: some View {
         HStack(spacing: 13) {
@@ -288,17 +325,27 @@ private struct AudioListRow: View {
                         .fill(VmicTheme.ink.opacity(0.72))
                         .frame(width: 30, height: 30)
 
-                    Image(systemName: "play.fill")
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                         .font(.caption.weight(.bold))
                         .foregroundStyle(.white)
                 }
             }
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(clip.title)
-                    .font(.system(size: 17, weight: .semibold, design: .serif))
-                    .foregroundStyle(isActive ? Color(red: 0.96, green: 0.16, blue: 0.20) : VmicTheme.ink)
-                    .lineLimit(1)
+                if isPlaying {
+                    MarqueeText(
+                        clip.title,
+                        font: .system(size: 17, weight: .semibold),
+                        color: VmicTheme.blue,
+                        isActive: true
+                    )
+                    .frame(height: 22)
+                } else {
+                    Text(clip.title)
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(isActive ? VmicTheme.blue : VmicTheme.ink)
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: 6) {
                     Text(settingsStore.text(.localAudio))
@@ -313,7 +360,7 @@ private struct AudioListRow: View {
 
                     Text(clip.artist?.isEmpty == false ? clip.artist! : settingsStore.text(.unknownArtist))
                         .font(.subheadline)
-                        .foregroundStyle(isActive ? Color(red: 0.96, green: 0.16, blue: 0.20) : VmicTheme.mutedInk)
+                        .foregroundStyle(isActive ? VmicTheme.blue : VmicTheme.mutedInk)
                         .lineLimit(1)
                 }
             }
@@ -382,6 +429,120 @@ private struct CoverArtworkView: View {
     }
 }
 
+private struct MarqueeText: View {
+    let text: String
+    let font: Font
+    let color: Color
+    let isActive: Bool
+
+    @State private var textWidth: CGFloat = 0
+    @State private var containerWidth: CGFloat = 0
+    @State private var isAnimating = false
+
+    private let spacing: CGFloat = 28
+
+    init(_ text: String, font: Font, color: Color, isActive: Bool) {
+        self.text = text
+        self.font = font
+        self.color = color
+        self.isActive = isActive
+    }
+
+    private var shouldScroll: Bool {
+        isActive && textWidth > containerWidth + 6
+    }
+
+    private var animationDuration: Double {
+        max(5.5, Double(textWidth + spacing) / 26)
+    }
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                if shouldScroll {
+                    HStack(spacing: spacing) {
+                        marqueeLabel
+                        marqueeLabel
+                    }
+                    .offset(x: isAnimating ? -(textWidth + spacing) : 0)
+                    .animation(
+                        .linear(duration: animationDuration).repeatForever(autoreverses: false),
+                        value: isAnimating
+                    )
+                } else {
+                    Text(text)
+                        .font(font)
+                        .foregroundStyle(color)
+                        .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .clipped()
+            .background(measurementLabel)
+            .onAppear {
+                containerWidth = proxy.size.width
+                restartIfNeeded()
+            }
+            .onChange(of: proxy.size.width) { _, width in
+                containerWidth = width
+                restartIfNeeded()
+            }
+            .onChange(of: text) { _, _ in
+                restartIfNeeded()
+            }
+            .onChange(of: isActive) { _, _ in
+                restartIfNeeded()
+            }
+            .onPreferenceChange(MarqueeTextWidthPreferenceKey.self) { width in
+                textWidth = width
+                restartIfNeeded()
+            }
+        }
+        .clipped()
+    }
+
+    private var marqueeLabel: some View {
+        Text(text)
+            .font(font)
+            .foregroundStyle(color)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+    }
+
+    private var measurementLabel: some View {
+        Text(text)
+            .font(font)
+            .lineLimit(1)
+            .fixedSize(horizontal: true, vertical: false)
+            .background {
+                GeometryReader { proxy in
+                    Color.clear.preference(key: MarqueeTextWidthPreferenceKey.self, value: proxy.size.width)
+                }
+            }
+            .hidden()
+    }
+
+    private func restartIfNeeded() {
+        isAnimating = false
+
+        guard shouldScroll else { return }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard shouldScroll else { return }
+            isAnimating = true
+        }
+    }
+}
+
+private struct MarqueeTextWidthPreferenceKey: PreferenceKey {
+    static var defaultValue: CGFloat = 0
+
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = max(value, nextValue())
+    }
+}
+
 private struct MiniStatus: View {
     let title: String
     let systemImage: String
@@ -426,33 +587,92 @@ private struct EmptySoundboardView: View {
     }
 }
 
-private struct BottomTransportBar: View {
+private struct BottomNowPlayingBar: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    let hasActivePlayback: Bool
+    let clip: SoundClip
+    let artworkDirectory: URL
+    let playbackState: SoundPlaybackState?
+    @Binding var volume: Double
+    let togglePlayback: () -> Void
     let stopAction: () -> Void
     let importAction: () -> Void
 
-    var body: some View {
-        HStack(spacing: 14) {
-            Button(action: stopAction) {
-                Image(systemName: "stop.fill")
-            }
-            .buttonStyle(TransportIconButtonStyle(isActive: hasActivePlayback))
-            .disabled(!hasActivePlayback)
+    private var isPlaying: Bool {
+        playbackState == .playing
+    }
 
-            Button(action: importAction) {
-                Label(settingsStore.text(.importShort), systemImage: "plus")
-                    .frame(maxWidth: .infinity)
+    var body: some View {
+        VStack(spacing: 8) {
+            HStack(spacing: 10) {
+                CoverArtworkView(artworkURL: clip.artworkURL(in: artworkDirectory), size: 48)
+
+                VStack(alignment: .leading, spacing: 3) {
+                    MarqueeText(
+                        clip.title,
+                        font: .subheadline.weight(.semibold),
+                        color: VmicTheme.ink,
+                        isActive: isPlaying
+                    )
+                    .frame(height: 20)
+
+                    Text(clip.artist?.isEmpty == false ? clip.artist! : settingsStore.text(.unknownArtist))
+                        .font(.caption)
+                        .foregroundStyle(VmicTheme.mutedInk)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 6)
+
+                Button(action: togglePlayback) {
+                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                }
+                .buttonStyle(TransportIconButtonStyle(isActive: true))
+
+                Button(action: importAction) {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(CompactTransportButtonStyle())
+                .accessibilityLabel(settingsStore.text(.importAudio))
+
+                Button(action: stopAction) {
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(CompactTransportButtonStyle())
             }
-            .buttonStyle(BlueProminentButtonStyle())
+
+            HStack(spacing: 8) {
+                Image(systemName: "speaker.wave.1")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+
+                Slider(value: $volume, in: 0...1)
+                    .tint(VmicTheme.blue)
+
+                Text(settingsStore.text(.volumePercent(Int((volume * 100).rounded()))))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            }
         }
-        .padding(10)
+        .padding(9)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.64), lineWidth: 1)
         }
+    }
+}
+
+private struct CompactTransportButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.subheadline.weight(.bold))
+            .foregroundStyle(VmicTheme.blue)
+            .frame(width: 34, height: 34)
+            .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
 

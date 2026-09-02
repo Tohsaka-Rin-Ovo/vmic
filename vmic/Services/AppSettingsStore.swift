@@ -149,6 +149,9 @@ enum VmicText {
     case removeFromLibrary
     case sortingEnabled
     case playback
+    case inputVolume
+    case inputVolumeDetail
+    case volumePercent(Int)
     case singlePlayback
     case singlePlaybackDetail
     case list
@@ -192,6 +195,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var inputVolume: Double {
+        didSet {
+            UserDefaults.standard.set(inputVolume, forKey: Self.inputVolumeKey)
+        }
+    }
+
     @Published var showDuration: Bool {
         didSet {
             UserDefaults.standard.set(showDuration, forKey: Self.showDurationKey)
@@ -201,6 +210,7 @@ final class AppSettingsStore: ObservableObject {
     private static let languageKey = "vmic.language"
     private static let themeKey = "vmic.theme"
     private static let singlePlaybackKey = "vmic.singlePlayback"
+    private static let inputVolumeKey = "vmic.inputVolume"
     private static let showDurationKey = "vmic.showDuration"
 
     init() {
@@ -209,6 +219,8 @@ final class AppSettingsStore: ObservableObject {
         let rawTheme = UserDefaults.standard.string(forKey: Self.themeKey)
         themeMode = rawTheme.flatMap(AppThemeMode.init(rawValue:)) ?? .system
         singlePlayback = UserDefaults.standard.bool(forKey: Self.singlePlaybackKey)
+        let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
+        inputVolume = min(max(savedVolume, 0), 1)
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
     }
 
@@ -441,6 +453,12 @@ final class AppSettingsStore: ObservableObject {
             return "排序模式已开启"
         case .playback:
             return "播放"
+        case .inputVolume:
+            return "输入音量"
+        case .inputVolumeDetail:
+            return "控制本地音频加入通话时的音量。"
+        case .volumePercent(let value):
+            return "\(value)%"
         case .singlePlayback:
             return "单音频播放"
         case .singlePlaybackDetail:
@@ -706,6 +724,12 @@ final class AppSettingsStore: ObservableObject {
             return "Sorting enabled"
         case .playback:
             return "Playback"
+        case .inputVolume:
+            return "Input Volume"
+        case .inputVolumeDetail:
+            return "Controls the local audio volume added to calls."
+        case .volumePercent(let value):
+            return "\(value)%"
         case .singlePlayback:
             return "Single Playback"
         case .singlePlaybackDetail:
