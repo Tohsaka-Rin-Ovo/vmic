@@ -186,6 +186,7 @@ private struct PlayerHeader: View {
                 .buttonStyle(.plain)
                 .accessibilityLabel(settingsStore.text(.audioList))
             }
+            .frame(maxWidth: 330, alignment: .leading)
         }
         .padding(18)
         .background(VmicTheme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -606,9 +607,9 @@ private struct MiniStatus: View {
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.84)
-            .frame(maxWidth: .infinity, minHeight: 34)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 5)
+            .frame(maxWidth: .infinity, minHeight: 32)
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }

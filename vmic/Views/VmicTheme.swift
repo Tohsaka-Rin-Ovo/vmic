@@ -2,6 +2,12 @@ import SwiftUI
 import UIKit
 
 enum VmicTheme {
+    static let navigationBarUIColor = UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.03, green: 0.07, blue: 0.13, alpha: 1)
+            : UIColor(red: 0.88, green: 0.95, blue: 1.00, alpha: 1)
+    }
+
     static let ink = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.90, green: 0.95, blue: 1.00, alpha: 1)
@@ -31,11 +37,7 @@ enum VmicTheme {
             ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 0.96)
             : UIColor(red: 0.96, green: 0.99, blue: 1.00, alpha: 0.98)
     })
-    static let navigationBarBackground = Color(UIColor { traits in
-        traits.userInterfaceStyle == .dark
-            ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 1)
-            : UIColor(red: 0.96, green: 0.99, blue: 1.00, alpha: 1)
-    })
+    static let navigationBarBackground = Color(navigationBarUIColor)
     static let separator = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.20, green: 0.28, blue: 0.40, alpha: 0.50)
@@ -87,11 +89,35 @@ struct BlueProminentButtonStyle: ButtonStyle {
 struct QuietIconButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.headline.weight(.semibold))
+            .font(.body.weight(.semibold))
             .foregroundStyle(VmicTheme.blue)
-            .frame(width: 44, height: 44)
+            .frame(width: 38, height: 38)
             .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: Circle())
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+extension UINavigationBar {
+    static func configureVmicAppearance() {
+        let appearance = UINavigationBarAppearance()
+        appearance.configureWithOpaqueBackground()
+        appearance.backgroundColor = VmicTheme.navigationBarUIColor
+        appearance.shadowColor = .clear
+        appearance.shadowImage = UIImage()
+
+        appearance.titleTextAttributes = [
+            .foregroundColor: UIColor { traits in
+                traits.userInterfaceStyle == .dark
+                    ? UIColor(red: 0.90, green: 0.95, blue: 1.00, alpha: 1)
+                    : UIColor(red: 0.06, green: 0.10, blue: 0.18, alpha: 1)
+            }
+        ]
+
+        let navigationBar = UINavigationBar.appearance()
+        navigationBar.standardAppearance = appearance
+        navigationBar.compactAppearance = appearance
+        navigationBar.scrollEdgeAppearance = appearance
+        navigationBar.compactScrollEdgeAppearance = appearance
     }
 }
 

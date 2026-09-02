@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 @main
 struct VmicApp: App {
@@ -6,6 +7,10 @@ struct VmicApp: App {
     @StateObject private var libraryStore = SoundLibraryStore()
     @StateObject private var playbackManager = AudioPlaybackManager()
     @StateObject private var settingsStore = AppSettingsStore()
+
+    init() {
+        UINavigationBar.configureVmicAppearance()
+    }
 
     var body: some Scene {
         WindowGroup {
