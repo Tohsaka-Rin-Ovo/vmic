@@ -36,6 +36,7 @@ struct DebugDiagnosticsView: View {
     @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var diagnosticLogStore: DiagnosticLogStore
 
     let initialFocus: DebugFocusTarget?
 
@@ -44,6 +45,7 @@ struct DebugDiagnosticsView: View {
 
     @State private var runningAction: DiagnosticAction?
     @State private var didCopyDiagnostics = false
+    @State private var didCopyLogs = false
     @State private var highlightedFocus: DebugFocusTarget?
 
     init(initialFocus: DebugFocusTarget? = nil) {
@@ -136,6 +138,13 @@ struct DebugDiagnosticsView: View {
 
                     DebugResultCard()
 
+                    DebugLogCard(
+                        logStore: diagnosticLogStore,
+                        didCopyLogs: didCopyLogs,
+                        copyLogs: copyDiagnosticLogs,
+                        clearLogs: clearDiagnosticLogs
+                    )
+
                     DebugSessionDetailsCard()
                 }
                 .padding(.horizontal, 16)
@@ -145,6 +154,11 @@ struct DebugDiagnosticsView: View {
             .scrollIndicators(.hidden)
             .background(VmicTheme.appBackground)
             .onAppear {
+                DiagnosticLogStore.shared.log(
+                    "进入调试页",
+                    source: .app,
+                    details: ["initialFocus=\(initialFocus?.id ?? "overview")"]
+                )
                 scrollToInitialFocus(with: proxy)
             }
         }
@@ -174,6 +188,7 @@ struct DebugDiagnosticsView: View {
     }
 
     private func prepareForMonitorExperiment() async {
+        DiagnosticLogStore.shared.log("准备监听验证", source: .monitorExperiment)
         playbackManager.stopAll()
         speechProbe.stop()
 
@@ -185,6 +200,7 @@ struct DebugDiagnosticsView: View {
     }
 
     private func prepareForOfficialSpeechProbe() async {
+        DiagnosticLogStore.shared.log("准备官方语音对照", source: .speechProbe)
         playbackManager.stopAll()
         monitorExperiment.stop()
 
@@ -211,13 +227,40 @@ struct DebugDiagnosticsView: View {
         }
     }
 
+    private func copyDiagnosticLogs() {
+        DiagnosticLogStore.shared.log("已复制运行日志", source: .app)
+        UIPasteboard.general.string = diagnosticLogStore.exportText()
+        didCopyLogs = true
+
+        Task {
+            try? await Task.sleep(nanoseconds: 1_200_000_000)
+            await MainActor.run {
+                didCopyLogs = false
+            }
+        }
+    }
+
+    private func clearDiagnosticLogs() {
+        diagnosticLogStore.clear()
+    }
+
     private func run(_ action: DiagnosticAction, operation: @escaping () async -> Void) {
         guard runningAction == nil else { return }
 
+        DiagnosticLogStore.shared.log(
+            "开始调试动作",
+            source: .app,
+            details: ["action=\(action.logName)"]
+        )
         runningAction = action
         Task {
             await operation()
             await MainActor.run {
+                DiagnosticLogStore.shared.log(
+                    "结束调试动作",
+                    source: .app,
+                    details: ["action=\(action.logName)"]
+                )
                 runningAction = nil
             }
         }
@@ -914,9 +957,15 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         do {
+            DiagnosticLogStore.shared.log(
+                "官方语音对照开始",
+                source: .speechProbe,
+                details: ["textLength=\(text.count)"]
+            )
             try reapplyInjectionPreference?()
 
             if synthesizer.isSpeaking {
+                DiagnosticLogStore.shared.log("停止上一段官方语音", source: .speechProbe)
                 synthesizer.stopSpeaking(at: .immediate)
             }
 
@@ -930,29 +979,46 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
 
             status = .running
             synthesizer.speak(utterance)
+            DiagnosticLogStore.shared.log(
+                "官方语音已提交给 AVSpeechSynthesizer",
+                source: .speechProbe,
+                details: [
+                    "voice=\(utterance.voice?.identifier ?? "default")",
+                    "volume=\(utterance.volume)"
+                ]
+            )
         } catch {
             status = .failed(error.localizedDescription)
+            DiagnosticLogStore.shared.log(
+                "官方语音对照失败",
+                source: .speechProbe,
+                details: ["error=\(error.localizedDescription)"]
+            )
         }
     }
 
     func stop() {
         guard synthesizer.isSpeaking else {
             status = .stopped
+            DiagnosticLogStore.shared.log("官方语音对照停止：当前未朗读", source: .speechProbe)
             return
         }
 
+        DiagnosticLogStore.shared.log("官方语音对照停止", source: .speechProbe)
         synthesizer.stopSpeaking(at: .immediate)
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             self?.status = .finished
+            DiagnosticLogStore.shared.log("官方语音对照播放完成", source: .speechProbe)
         }
     }
 
     nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
         Task { @MainActor [weak self] in
             self?.status = .stopped
+            DiagnosticLogStore.shared.log("官方语音对照已取消", source: .speechProbe)
         }
     }
 }
@@ -960,6 +1026,15 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
 private enum MonitorVolumeExperimentKind: Equatable {
     case baseline
     case mutedMonitor
+
+    var logName: String {
+        switch self {
+        case .baseline:
+            return "baseline"
+        case .mutedMonitor:
+            return "mutedMonitor"
+        }
+    }
 }
 
 private enum MonitorVolumeExperimentStatus: Equatable {
@@ -968,6 +1043,21 @@ private enum MonitorVolumeExperimentStatus: Equatable {
     case finished(MonitorVolumeExperimentKind)
     case stopped
     case failed(String)
+
+    var logName: String {
+        switch self {
+        case .idle:
+            return "idle"
+        case .running(let kind):
+            return "running(\(kind.logName))"
+        case .finished(let kind):
+            return "finished(\(kind.logName))"
+        case .stopped:
+            return "stopped"
+        case .failed(let message):
+            return "failed(\(message))"
+        }
+    }
 }
 
 @MainActor
@@ -993,6 +1083,7 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
     private var localAudioFile: AVAudioFile?
     private var bridgeAudioFile: AVAudioFile?
     private var finishTask: Task<Void, Never>?
+    private var lastLoggedVolumeSignature: String?
 
     var isRunning: Bool {
         if case .running = status {
@@ -1007,6 +1098,11 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         from directory: URL,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
+        DiagnosticLogStore.shared.log(
+            "请求基线播放",
+            source: .monitorExperiment,
+            details: ["title=\(clip.title)"]
+        )
         localMonitorVolume = 1
         bridgeSendVolume = 1
         play(
@@ -1022,6 +1118,11 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         from directory: URL,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
+        DiagnosticLogStore.shared.log(
+            "请求静音监听",
+            source: .monitorExperiment,
+            details: ["title=\(clip.title)"]
+        )
         localMonitorVolume = 0
         bridgeSendVolume = 1
         play(
@@ -1033,6 +1134,11 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
     }
 
     func stop() {
+        DiagnosticLogStore.shared.log(
+            "停止监听验证",
+            source: .monitorExperiment,
+            details: ["status=\(status.logName)"]
+        )
         stopEngineOnly()
         status = .stopped
     }
@@ -1044,6 +1150,16 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         let url = clip.fileURL(in: directory)
+        DiagnosticLogStore.shared.log(
+            "监听验证准备播放",
+            source: .monitorExperiment,
+            details: [
+                "kind=\(kind.logName)",
+                "title=\(clip.title)",
+                "file=\(url.lastPathComponent)",
+                "exists=\(FileManager.default.fileExists(atPath: url.path))"
+            ]
+        )
 
         do {
             stopEngineOnly()
@@ -1055,6 +1171,16 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
             let bridgePlayerNode = AVAudioPlayerNode()
             let silentBridgeMixer = AVAudioMixerNode()
             let format = localAudioFile.processingFormat
+            DiagnosticLogStore.shared.log(
+                "监听验证音频文件已打开",
+                source: .monitorExperiment,
+                details: [
+                    "kind=\(kind.logName)",
+                    "sampleRate=\(Int(format.sampleRate.rounded()))",
+                    "channels=\(format.channelCount)",
+                    "frames=\(localAudioFile.length)"
+                ]
+            )
 
             engine.attach(localPlayerNode)
             engine.attach(bridgePlayerNode)
@@ -1073,6 +1199,15 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
 
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             try engine.start()
+            DiagnosticLogStore.shared.log(
+                "监听验证引擎已启动",
+                source: .monitorExperiment,
+                details: [
+                    "kind=\(kind.logName)",
+                    "localVolume=\(localMonitorVolume)",
+                    "bridgeVolume=\(bridgeSendVolume)"
+                ]
+            )
 
             self.engine = engine
             self.localPlayerNode = localPlayerNode
@@ -1088,6 +1223,14 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         } catch {
             stopEngineOnly()
             status = .failed(error.localizedDescription)
+            DiagnosticLogStore.shared.log(
+                "监听验证失败",
+                source: .monitorExperiment,
+                details: [
+                    "kind=\(kind.logName)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 
@@ -1101,6 +1244,23 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         }
 
         bridgePlayerNode?.volume = Float(clamped(bridgeSendVolume))
+
+        let localPercent = Int((Double(localPlayerNode?.volume ?? -1) * 100).rounded())
+        let bridgePercent = Int((Double(bridgePlayerNode?.volume ?? -1) * 100).rounded())
+        let signature = "\(status.logName)|\(localPercent / 5)|\(bridgePercent / 5)"
+
+        guard signature != lastLoggedVolumeSignature else { return }
+
+        lastLoggedVolumeSignature = signature
+        DiagnosticLogStore.shared.log(
+            "监听验证音量更新",
+            source: .monitorExperiment,
+            details: [
+                "status=\(status.logName)",
+                "local=\(localPercent)%",
+                "bridge=\(bridgePercent)%"
+            ]
+        )
     }
 
     private func frameCount(for audioFile: AVAudioFile) -> AVAudioFrameCount {
@@ -1124,6 +1284,11 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
 
                 self.stopEngineOnly()
                 self.status = .finished(kind)
+                DiagnosticLogStore.shared.log(
+                    "监听验证自然结束",
+                    source: .monitorExperiment,
+                    details: ["kind=\(kind.logName)"]
+                )
             }
         }
     }
@@ -1140,13 +1305,31 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         silentBridgeMixer = nil
         localAudioFile = nil
         bridgeAudioFile = nil
+        lastLoggedVolumeSignature = nil
     }
 
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
+        DiagnosticLogStore.shared.log(
+            "监听验证配置音频会话开始",
+            source: .monitorExperiment,
+            details: [
+                "categoryBefore=\(session.category.rawValue)",
+                "modeBefore=\(session.mode.rawValue)"
+            ]
+        )
         try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         try session.setActive(true)
         try reapplyInjectionPreference?()
+        DiagnosticLogStore.shared.log(
+            "监听验证配置音频会话完成",
+            source: .monitorExperiment,
+            details: [
+                "category=\(session.category.rawValue)",
+                "mode=\(session.mode.rawValue)",
+                "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
+            ]
+        )
     }
 
     private func clamped(_ value: Double) -> Double {
@@ -1192,6 +1375,98 @@ private struct DebugResultCard: View {
         case .unsupportedOS, .permissionRequired, .busy:
             return Color(red: 0.88, green: 0.58, blue: 0.12)
         }
+    }
+}
+
+private struct DebugLogCard: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    @ObservedObject var logStore: DiagnosticLogStore
+
+    let didCopyLogs: Bool
+    let copyLogs: () -> Void
+    let clearLogs: () -> Void
+
+    private var visibleEntries: [DiagnosticLogEntry] {
+        Array(logStore.entries.suffix(18).reversed())
+    }
+
+    var body: some View {
+        DebugCard(
+            title: settingsStore.text(.debugLog),
+            subtitle: settingsStore.text(.debugLogDetail),
+            systemImage: "doc.text.magnifyingglass",
+            tint: VmicTheme.blue
+        ) {
+            HStack(spacing: 10) {
+                Button(action: copyLogs) {
+                    DiagnosticActionLabel(
+                        title: didCopyLogs ? settingsStore.text(.copiedDebugLog) : settingsStore.text(.copyDebugLog),
+                        systemImage: didCopyLogs ? "checkmark" : "doc.on.doc",
+                        isRunning: false
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle())
+
+                Button(action: clearLogs) {
+                    DiagnosticActionLabel(
+                        title: settingsStore.text(.clearDebugLog),
+                        systemImage: "trash",
+                        isRunning: false
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.mutedInk))
+                .disabled(logStore.entries.isEmpty)
+            }
+
+            if visibleEntries.isEmpty {
+                Text(settingsStore.text(.noDebugLog))
+                    .font(.footnote.weight(.medium))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 2)
+            } else {
+                LazyVStack(spacing: 8) {
+                    ForEach(visibleEntries) { entry in
+                        DebugLogRow(entry: entry)
+                    }
+                }
+            }
+        }
+    }
+}
+
+private struct DebugLogRow: View {
+    let entry: DiagnosticLogEntry
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 8) {
+                Text(entry.timeText)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+
+                Text(entry.source.rawValue)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(VmicTheme.blue)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(VmicTheme.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 5, style: .continuous))
+
+                Spacer(minLength: 0)
+            }
+
+            Text(entry.message)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(VmicTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .textSelection(.enabled)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(VmicTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
@@ -1476,6 +1751,21 @@ private enum DiagnosticAction: Equatable {
     case openSettings
     case enableInjection
     case disableInjection
+
+    var logName: String {
+        switch self {
+        case .refresh:
+            return "refresh"
+        case .requestPermission:
+            return "requestPermission"
+        case .openSettings:
+            return "openSettings"
+        case .enableInjection:
+            return "enableInjection"
+        case .disableInjection:
+            return "disableInjection"
+        }
+    }
 }
 
 private struct DiagnosticActionLabel: View {

@@ -196,6 +196,14 @@ final class MicrophoneInjectionManager: ObservableObject {
     }
 
     func refresh(printDiagnostics: Bool = false) async {
+        DiagnosticLogStore.shared.log(
+            "刷新注入状态开始",
+            source: .injection,
+            details: [
+                "system=iOS \(UIDevice.current.systemVersion)",
+                "printDiagnostics=\(printDiagnostics)"
+            ]
+        )
         lastRefreshAt = Date()
         refreshAudioSessionDiagnostics(printToConsole: printDiagnostics)
 
@@ -203,10 +211,25 @@ final class MicrophoneInjectionManager: ObservableObject {
             permissionState = .unsupportedOS(version: UIDevice.current.systemVersion)
             isInjectionEnabled = false
             isInjectionAvailableInCurrentCall = false
+            DiagnosticLogStore.shared.log(
+                "刷新注入状态结束：系统版本不支持",
+                source: .injection,
+                details: ["permission=\(debugValue(permissionState))"]
+            )
             return
         }
 
         permissionState = Self.map(AVAudioApplication.shared.microphoneInjectionPermission)
+        DiagnosticLogStore.shared.log(
+            "刷新注入状态结束",
+            source: .injection,
+            details: [
+                "permission=\(debugValue(permissionState))",
+                "available=\(debugValue(audioSessionDiagnostics.microphoneInjectionAvailable))",
+                "preferred=\(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")",
+                "enabled=\(isInjectionEnabled)"
+            ]
+        )
     }
 
     func refreshAudioSessionDiagnostics(printToConsole: Bool = false, updatesModeResult: Bool = true) {
@@ -227,14 +250,30 @@ final class MicrophoneInjectionManager: ObservableObject {
         if printToConsole {
             print(channelDiagnosticsReport)
         }
+
+        DiagnosticLogStore.shared.log(
+            "采集音频会话",
+            source: .injection,
+            details: [
+                "category=\(diagnostics.category)",
+                "mode=\(diagnostics.mode)",
+                "preferred=\(diagnostics.preferredMicrophoneInjectionMode ?? "unsupported")",
+                "available=\(debugValue(diagnostics.microphoneInjectionAvailable))",
+                "inputs=\(diagnostics.inputPortTypes.joined(separator: ","))",
+                "outputs=\(diagnostics.outputPortTypes.joined(separator: ","))"
+            ]
+        )
     }
 
     func copyAudioSessionDiagnosticsToPasteboard() {
         refreshAudioSessionDiagnostics(printToConsole: true)
         UIPasteboard.general.string = channelDiagnosticsReport
+        DiagnosticLogStore.shared.log("已复制通道诊断", source: .injection)
     }
 
     func requestPermission() async {
+        DiagnosticLogStore.shared.log("请求麦克风注入权限开始", source: .injection)
+
         guard #available(iOS 18.2, *) else {
             await refresh()
             return
@@ -247,21 +286,43 @@ final class MicrophoneInjectionManager: ObservableObject {
         }
 
         permissionState = Self.map(result)
+        DiagnosticLogStore.shared.log(
+            "请求麦克风注入权限结束",
+            source: .injection,
+            details: ["permission=\(debugValue(permissionState))"]
+        )
     }
 
     @discardableResult
     func setInjectionEnabled(_ enabled: Bool) async -> InjectionModeChangeResult {
+        DiagnosticLogStore.shared.log(
+            "请求切换注入开关",
+            source: .injection,
+            details: ["target=\(enabled)", "current=\(isInjectionEnabled)"]
+        )
+
         guard #available(iOS 18.2, *) else {
             await refresh()
+            DiagnosticLogStore.shared.log(
+                "切换注入开关失败：系统版本不支持",
+                source: .injection,
+                details: ["system=iOS \(UIDevice.current.systemVersion)"]
+            )
             return publishModeChangeResult(.unsupportedOS(version: UIDevice.current.systemVersion))
         }
 
         guard !enabled || permissionState.canEnableInjection else {
             isInjectionEnabled = false
+            DiagnosticLogStore.shared.log(
+                "切换注入开关失败：权限未就绪",
+                source: .injection,
+                details: ["permission=\(debugValue(permissionState))"]
+            )
             return publishModeChangeResult(.permissionRequired(state: permissionState))
         }
 
         guard !isChangingInjectionMode else {
+            DiagnosticLogStore.shared.log("切换注入开关被跳过：已有操作进行中", source: .injection)
             return publishModeChangeResult(.busy)
         }
 
@@ -276,6 +337,15 @@ final class MicrophoneInjectionManager: ObservableObject {
             refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
             isChangingInjectionMode = false
             pendingInjectionMode = nil
+            DiagnosticLogStore.shared.log(
+                "切换注入开关成功",
+                source: .injection,
+                details: [
+                    "enabled=\(isInjectionEnabled)",
+                    "available=\(isInjectionAvailableInCurrentCall)",
+                    "preferred=\(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")"
+                ]
+            )
             return publishModeChangeResult(enabled ? .enabled(channelAvailable: isInjectionAvailableInCurrentCall) : .disabled)
         } catch {
             isInjectionEnabled = false
@@ -283,30 +353,54 @@ final class MicrophoneInjectionManager: ObservableObject {
             lastError = error.localizedDescription
             isChangingInjectionMode = false
             pendingInjectionMode = nil
+            DiagnosticLogStore.shared.log(
+                "切换注入开关失败：系统拒绝",
+                source: .injection,
+                details: ["error=\(error.localizedDescription)"]
+            )
             return publishModeChangeResult(.failed(message: error.localizedDescription))
         }
     }
 
     func reapplyInjectionPreferenceIfNeeded() throws {
-        guard isInjectionEnabled else { return }
+        guard isInjectionEnabled else {
+            DiagnosticLogStore.shared.log("跳过重申注入偏好：开关未开启", source: .injection)
+            return
+        }
 
         if #available(iOS 18.2, *) {
             do {
+                DiagnosticLogStore.shared.log("重申注入偏好开始", source: .injection)
                 try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(.spokenAudio)
                 lastInjectionModeChangeAt = Date()
                 lastError = nil
                 refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
                 _ = publishModeChangeResult(.enabled(channelAvailable: isInjectionAvailableInCurrentCall))
+                DiagnosticLogStore.shared.log(
+                    "重申注入偏好成功",
+                    source: .injection,
+                    details: [
+                        "available=\(isInjectionAvailableInCurrentCall)",
+                        "preferred=\(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")"
+                    ]
+                )
             } catch {
                 lastInjectionModeChangeAt = Date()
                 lastError = error.localizedDescription
                 _ = publishModeChangeResult(.failed(message: error.localizedDescription))
+                DiagnosticLogStore.shared.log(
+                    "重申注入偏好失败",
+                    source: .injection,
+                    details: ["error=\(error.localizedDescription)"]
+                )
                 throw error
             }
         }
     }
 
     func openAddAudioInCallsSettings() async {
+        DiagnosticLogStore.shared.log("打开系统通话音频设置", source: .injection)
+
         guard #available(iOS 18.2, *) else {
             openAppSettings()
             return
@@ -316,11 +410,17 @@ final class MicrophoneInjectionManager: ObservableObject {
             try await AccessibilitySettings.openSettings(for: .allowAppsToAddAudioToCalls)
         } catch {
             lastError = error.localizedDescription
+            DiagnosticLogStore.shared.log(
+                "打开系统通话音频设置失败，回退到 App 设置",
+                source: .injection,
+                details: ["error=\(error.localizedDescription)"]
+            )
             openAppSettings()
         }
     }
 
     func openSoftwareUpdateSettings() {
+        DiagnosticLogStore.shared.log("打开系统更新设置", source: .app)
         // This deep link is intended for personal builds. Apple does not provide
         // a fully stable public URL for the Software Update screen.
         if let url = URL(string: "App-prefs:General&path=SOFTWARE_UPDATE_LINK") {
@@ -348,6 +448,15 @@ final class MicrophoneInjectionManager: ObservableObject {
             if isInjectionEnabled {
                 _ = publishModeChangeResult(.enabled(channelAvailable: isInjectionAvailableInCurrentCall))
             }
+
+            DiagnosticLogStore.shared.log(
+                "收到注入通道能力通知",
+                source: .injection,
+                details: [
+                    "available=\(available)",
+                    "enabled=\(isInjectionEnabled)"
+                ]
+            )
         }
     }
 
@@ -356,19 +465,40 @@ final class MicrophoneInjectionManager: ObservableObject {
             lastRouteChangeAt = Date()
             lastRouteChangeReason = Self.routeChangeReason(from: notification)
             refreshAudioSessionDiagnostics(printToConsole: true)
+            DiagnosticLogStore.shared.log(
+                "收到音频路由变化通知",
+                source: .injection,
+                details: [
+                    "reason=\(lastRouteChangeReason ?? "unknown")",
+                    "inputs=\(audioSessionDiagnostics.inputPortTypes.joined(separator: ","))",
+                    "outputs=\(audioSessionDiagnostics.outputPortTypes.joined(separator: ","))"
+                ]
+            )
         }
     }
 
     private func observeMediaServicesReset() async {
         for await notification in NotificationCenter.default.notifications(named: AVAudioSession.mediaServicesWereResetNotification) {
             lastMediaServicesResetAt = Date()
-            print("媒体服务已重置: \(notification.name), userInfo=\(String(describing: notification.userInfo))")
+            DiagnosticLogStore.shared.log(
+                "媒体服务已重置",
+                source: .injection,
+                details: [
+                    "notification=\(notification.name.rawValue)",
+                    "enabled=\(isInjectionEnabled)"
+                ]
+            )
 
             if isInjectionEnabled {
                 do {
                     try reapplyInjectionPreferenceIfNeeded()
                 } catch {
                     lastError = error.localizedDescription
+                    DiagnosticLogStore.shared.log(
+                        "媒体服务重置后恢复注入失败",
+                        source: .injection,
+                        details: ["error=\(error.localizedDescription)"]
+                    )
                 }
             } else {
                 refreshAudioSessionDiagnostics(printToConsole: true)

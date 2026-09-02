@@ -7,9 +7,13 @@ struct VmicApp: App {
     @StateObject private var libraryStore = SoundLibraryStore()
     @StateObject private var playbackManager = AudioPlaybackManager()
     @StateObject private var settingsStore = AppSettingsStore()
+    @StateObject private var diagnosticLogStore = DiagnosticLogStore.shared
 
     init() {
         UINavigationBar.configureVmicAppearance()
+        Task { @MainActor in
+            DiagnosticLogStore.shared.log("应用初始化", source: .app)
+        }
     }
 
     var body: some Scene {
@@ -19,6 +23,7 @@ struct VmicApp: App {
                 .environmentObject(libraryStore)
                 .environmentObject(playbackManager)
                 .environmentObject(settingsStore)
+                .environmentObject(diagnosticLogStore)
         }
     }
 }

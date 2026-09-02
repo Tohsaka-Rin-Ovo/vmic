@@ -25,12 +25,21 @@ struct ContentView: View {
                 .vmicOpaqueNavigationBar()
         }
         .task {
+            await MainActor.run {
+                DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
+            }
             await injectionManager.refresh()
         }
         .onChange(of: scenePhase) { _, newPhase in
-            guard newPhase == .active else { return }
+            Task { @MainActor in
+                DiagnosticLogStore.shared.log(
+                    "场景状态变化",
+                    source: .app,
+                    details: ["phase=\(scenePhaseDescription(newPhase))"]
+                )
+                guard newPhase == .active else { return }
 
-            Task {
+                DiagnosticLogStore.shared.log("App 回到前台，刷新注入状态", source: .app)
                 await injectionManager.refresh()
             }
         }
@@ -91,5 +100,18 @@ struct ContentView: View {
 
     private func closeSettings() {
         isSettingsPresented = false
+    }
+
+    private func scenePhaseDescription(_ phase: ScenePhase) -> String {
+        switch phase {
+        case .active:
+            return "active"
+        case .inactive:
+            return "inactive"
+        case .background:
+            return "background"
+        @unknown default:
+            return "unknown"
+        }
     }
 }

@@ -45,6 +45,12 @@ enum VmicText {
     case language
     case about
     case debug
+    case debugLog
+    case debugLogDetail
+    case copyDebugLog
+    case copiedDebugLog
+    case clearDebugLog
+    case noDebugLog
     case monitorVolumeExperiment
     case monitorVolumeExperimentDetail
     case officialSpeechProbe
@@ -280,6 +286,18 @@ final class AppSettingsStore: ObservableObject {
             return "关于"
         case .debug:
             return "调试"
+        case .debugLog:
+            return "运行日志"
+        case .debugLogDetail:
+            return "记录最近的注入、播放、通道和验证事件。"
+        case .copyDebugLog:
+            return "复制日志"
+        case .copiedDebugLog:
+            return "已复制"
+        case .clearDebugLog:
+            return "清空日志"
+        case .noDebugLog:
+            return "暂无日志，执行一次刷新、播放或验证后会显示。"
         case .monitorVolumeExperiment:
             return "监听验证"
         case .monitorVolumeExperimentDetail:
@@ -621,6 +639,18 @@ final class AppSettingsStore: ObservableObject {
             return "About"
         case .debug:
             return "Debug"
+        case .debugLog:
+            return "Runtime Log"
+        case .debugLogDetail:
+            return "Records recent injection, playback, channel, and probe events."
+        case .copyDebugLog:
+            return "Copy Log"
+        case .copiedDebugLog:
+            return "Copied"
+        case .clearDebugLog:
+            return "Clear Log"
+        case .noDebugLog:
+            return "No logs yet. Refresh, play, or run a probe to create entries."
         case .monitorVolumeExperiment:
             return "Monitor Check"
         case .monitorVolumeExperimentDetail:

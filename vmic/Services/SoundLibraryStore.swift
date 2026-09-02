@@ -26,12 +26,27 @@ final class SoundLibraryStore: ObservableObject {
             try fileManager.createDirectory(at: artworkDirectory, withIntermediateDirectories: true)
             try load()
             refreshMissingMetadataIfNeeded()
+            DiagnosticLogStore.shared.log(
+                "音频库初始化完成",
+                source: .library,
+                details: ["clips=\(clips.count)"]
+            )
         } catch {
             lastError = error.localizedDescription
+            DiagnosticLogStore.shared.log(
+                "音频库初始化失败",
+                source: .library,
+                details: ["error=\(error.localizedDescription)"]
+            )
         }
     }
 
     func importFiles(from urls: [URL]) async {
+        DiagnosticLogStore.shared.log(
+            "开始导入音频",
+            source: .library,
+            details: ["count=\(urls.count)"]
+        )
         for sourceURL in urls {
             importFile(from: sourceURL)
         }
@@ -39,6 +54,11 @@ final class SoundLibraryStore: ObservableObject {
     }
 
     func delete(_ clip: SoundClip) {
+        DiagnosticLogStore.shared.log(
+            "从 App 列表移除音频",
+            source: .library,
+            details: ["title=\(clip.title)", "file=\(clip.fileName)"]
+        )
         clips.removeAll { $0.id == clip.id }
         updateSortOrder()
         save()
@@ -48,11 +68,21 @@ final class SoundLibraryStore: ObservableObject {
         let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty, let index = clips.firstIndex(where: { $0.id == clip.id }) else { return }
 
+        DiagnosticLogStore.shared.log(
+            "重命名音频",
+            source: .library,
+            details: ["from=\(clips[index].title)", "to=\(trimmed)"]
+        )
         clips[index].title = trimmed
         save()
     }
 
     func move(from source: IndexSet, to destination: Int) {
+        DiagnosticLogStore.shared.log(
+            "调整音频排序",
+            source: .library,
+            details: ["source=\(Array(source))", "destination=\(destination)"]
+        )
         clips.move(fromOffsets: source, toOffset: destination)
         updateSortOrder()
         save()
@@ -93,8 +123,27 @@ final class SoundLibraryStore: ObservableObject {
             )
             updateSortOrder()
             lastError = nil
+            DiagnosticLogStore.shared.log(
+                "导入单个音频成功",
+                source: .library,
+                details: [
+                    "source=\(sourceURL.lastPathComponent)",
+                    "title=\(metadata.title ?? originalName)",
+                    "file=\(destinationName)",
+                    "duration=\(formatDuration(metadata.durationSeconds))",
+                    "artwork=\(metadata.artworkFileName ?? "none")"
+                ]
+            )
         } catch {
             lastError = "无法导入 \(sourceURL.lastPathComponent)：\(error.localizedDescription)"
+            DiagnosticLogStore.shared.log(
+                "导入单个音频失败",
+                source: .library,
+                details: [
+                    "source=\(sourceURL.lastPathComponent)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 
@@ -201,6 +250,7 @@ final class SoundLibraryStore: ObservableObject {
 
         if didUpdate {
             save()
+            DiagnosticLogStore.shared.log("刷新缺失音频元数据完成", source: .library)
         }
     }
 
@@ -313,6 +363,14 @@ final class SoundLibraryStore: ObservableObject {
     private func normalizedString(_ value: String?) -> String? {
         let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines)
         return trimmed?.isEmpty == false ? trimmed : nil
+    }
+
+    private func formatDuration(_ seconds: Double?) -> String {
+        guard let seconds, seconds.isFinite, seconds > 0 else {
+            return "unknown"
+        }
+
+        return String(format: "%.2fs", seconds)
     }
 }
 

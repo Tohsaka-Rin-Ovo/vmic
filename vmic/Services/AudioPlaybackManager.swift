@@ -19,6 +19,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     private var playersByClipID: [UUID: AVAudioPlayer] = [:]
     private var clipIDsByPlayerID: [ObjectIdentifier: UUID] = [:]
     private var outputVolume: Float = 1
+    private var lastLoggedOutputVolume: Float?
     private var progressTimer: Timer?
 
     func playbackState(for clipID: UUID) -> SoundPlaybackState? {
@@ -60,6 +61,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         player.currentTime = duration * targetProgress
         currentClipID = clipID
         refreshPlaybackProgress()
+        DiagnosticLogStore.shared.log(
+            "调整播放进度",
+            source: .playback,
+            details: [
+                "clipID=\(shortID(clipID))",
+                "progress=\(formatPercent(targetProgress))",
+                "time=\(formatSeconds(player.currentTime))",
+                "duration=\(formatSeconds(duration))"
+            ]
+        )
 
         if player.isPlaying {
             startProgressTimerIfNeeded()
@@ -71,6 +82,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         playersByClipID.values.forEach { player in
             player.volume = outputVolume
         }
+
+        let shouldLog = lastLoggedOutputVolume.map { abs($0 - outputVolume) >= 0.01 } ?? true
+        if shouldLog {
+            lastLoggedOutputVolume = outputVolume
+            DiagnosticLogStore.shared.log(
+                "设置桥接输入音量",
+                source: .playback,
+                details: ["volume=\(formatPercent(Double(outputVolume)))", "activePlayers=\(playersByClipID.count)"]
+            )
+        }
     }
 
     func toggle(
@@ -79,6 +100,15 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         volume: Double,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
+        DiagnosticLogStore.shared.log(
+            "切换播放状态",
+            source: .playback,
+            details: [
+                "title=\(clip.title)",
+                "clipID=\(shortID(clip.id))",
+                "state=\(playbackStateDescription(for: clip.id))"
+            ]
+        )
         setOutputVolume(volume)
 
         switch playbackState(for: clip.id) {
@@ -97,6 +127,17 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         let url = clip.fileURL(in: directory)
+        DiagnosticLogStore.shared.log(
+            "准备播放音频",
+            source: .playback,
+            details: [
+                "title=\(clip.title)",
+                "clipID=\(shortID(clip.id))",
+                "file=\(url.lastPathComponent)",
+                "exists=\(FileManager.default.fileExists(atPath: url.path))",
+                "volume=\(formatPercent(Double(outputVolume)))"
+            ]
+        )
 
         do {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
@@ -117,10 +158,22 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
 
-            player.play()
+            let didStart = player.play()
             refreshPlaybackProgress()
             startProgressTimerIfNeeded()
             lastError = nil
+            DiagnosticLogStore.shared.log(
+                "播放音频已调用",
+                source: .playback,
+                details: [
+                    "title=\(clip.title)",
+                    "clipID=\(shortID(clip.id))",
+                    "didStart=\(didStart)",
+                    "duration=\(formatSeconds(player.duration))",
+                    "sampleRate=\(Int(player.format.sampleRate.rounded()))",
+                    "channels=\(player.format.channelCount)"
+                ]
+            )
         } catch {
             activeClipIDs.remove(clip.id)
             pausedClipIDs.remove(clip.id)
@@ -128,6 +181,15 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             elapsedTimeByClipID[clip.id] = nil
             durationByClipID[clip.id] = nil
             lastError = "无法播放 \(clip.title)：\(error.localizedDescription)"
+            DiagnosticLogStore.shared.log(
+                "播放音频失败",
+                source: .playback,
+                details: [
+                    "title=\(clip.title)",
+                    "clipID=\(shortID(clip.id))",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 
@@ -138,6 +200,15 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         pausedClipIDs.insert(clip.id)
         currentClipID = clip.id
         refreshPlaybackProgress()
+        DiagnosticLogStore.shared.log(
+            "暂停音频",
+            source: .playback,
+            details: [
+                "title=\(clip.title)",
+                "clipID=\(shortID(clip.id))",
+                "time=\(formatSeconds(player.currentTime))"
+            ]
+        )
     }
 
     func resume(
@@ -149,19 +220,47 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         do {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             player.volume = outputVolume
-            player.play()
+            let didStart = player.play()
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
             refreshPlaybackProgress()
             startProgressTimerIfNeeded()
             lastError = nil
+            DiagnosticLogStore.shared.log(
+                "恢复播放音频",
+                source: .playback,
+                details: [
+                    "title=\(clip.title)",
+                    "clipID=\(shortID(clip.id))",
+                    "didStart=\(didStart)",
+                    "time=\(formatSeconds(player.currentTime))"
+                ]
+            )
         } catch {
             lastError = "无法继续播放 \(clip.title)：\(error.localizedDescription)"
+            DiagnosticLogStore.shared.log(
+                "恢复播放失败",
+                source: .playback,
+                details: [
+                    "title=\(clip.title)",
+                    "clipID=\(shortID(clip.id))",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 
     func stop(_ clip: SoundClip) {
         if let player = playersByClipID[clip.id] {
+            DiagnosticLogStore.shared.log(
+                "停止音频",
+                source: .playback,
+                details: [
+                    "title=\(clip.title)",
+                    "clipID=\(shortID(clip.id))",
+                    "time=\(formatSeconds(player.currentTime))"
+                ]
+            )
             player.stop()
             clipIDsByPlayerID[ObjectIdentifier(player)] = nil
         }
@@ -177,6 +276,11 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     }
 
     func stopAll() {
+        DiagnosticLogStore.shared.log(
+            "停止全部音频",
+            source: .playback,
+            details: ["activePlayers=\(playersByClipID.count)"]
+        )
         playersByClipID.values.forEach { $0.stop() }
         playersByClipID.removeAll()
         clipIDsByPlayerID.removeAll()
@@ -192,6 +296,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
 
     nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
         Task { @MainActor in
+            if let clipID = clipIDsByPlayerID[ObjectIdentifier(player)] {
+                DiagnosticLogStore.shared.log(
+                    "音频播放完成",
+                    source: .playback,
+                    details: [
+                        "clipID=\(shortID(clipID))",
+                        "successfully=\(flag)"
+                    ]
+                )
+            }
             clear(player)
         }
     }
@@ -199,6 +313,11 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
         Task { @MainActor in
             lastError = error?.localizedDescription
+            DiagnosticLogStore.shared.log(
+                "音频解码错误",
+                source: .playback,
+                details: ["error=\(error?.localizedDescription ?? "unknown")"]
+            )
             clear(player)
         }
     }
@@ -273,8 +392,59 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
 
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
+        DiagnosticLogStore.shared.log(
+            "配置播放音频会话开始",
+            source: .playback,
+            details: [
+                "categoryBefore=\(session.category.rawValue)",
+                "modeBefore=\(session.mode.rawValue)",
+                "sampleRateBefore=\(Int(session.sampleRate.rounded()))"
+            ]
+        )
         try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        DiagnosticLogStore.shared.log(
+            "播放音频会话 setCategory 完成",
+            source: .playback,
+            details: [
+                "category=\(session.category.rawValue)",
+                "mode=\(session.mode.rawValue)"
+            ]
+        )
         try session.setActive(true)
+        DiagnosticLogStore.shared.log(
+            "播放音频会话 setActive 完成",
+            source: .playback,
+            details: [
+                "sampleRate=\(Int(session.sampleRate.rounded()))",
+                "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
+                "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
+            ]
+        )
         try reapplyInjectionPreference?()
+        DiagnosticLogStore.shared.log("播放音频会话配置完成", source: .playback)
+    }
+
+    private func playbackStateDescription(for clipID: UUID) -> String {
+        switch playbackState(for: clipID) {
+        case .playing:
+            return "playing"
+        case .paused:
+            return "paused"
+        case nil:
+            return "idle"
+        }
+    }
+
+    private func shortID(_ id: UUID) -> String {
+        String(id.uuidString.prefix(8))
+    }
+
+    private func formatPercent(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
+    private func formatSeconds(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite else { return "unknown" }
+        return String(format: "%.2fs", seconds)
     }
 }
