@@ -109,7 +109,12 @@ struct SoundboardView: View {
             playbackManager.stopAll()
         }
 
-        playbackManager.toggle(clip, from: libraryStore.soundsDirectory, volume: settingsStore.inputVolume)
+        playbackManager.toggle(
+            clip,
+            from: libraryStore.soundsDirectory,
+            volume: settingsStore.inputVolume,
+            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+        )
     }
 }
 
@@ -215,6 +220,7 @@ private struct PlayerHeader: View {
 }
 
 private struct AudioLibraryView: View {
+    @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
@@ -365,7 +371,12 @@ private struct AudioLibraryView: View {
             playbackManager.stopAll()
         }
 
-        playbackManager.toggle(clip, from: libraryStore.soundsDirectory, volume: settingsStore.inputVolume)
+        playbackManager.toggle(
+            clip,
+            from: libraryStore.soundsDirectory,
+            volume: settingsStore.inputVolume,
+            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+        )
     }
 }
 

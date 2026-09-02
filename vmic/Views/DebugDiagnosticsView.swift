@@ -573,7 +573,11 @@ private struct MonitorVolumeExperimentCard: View {
         Task {
             await prepareForExperiment()
             await MainActor.run {
-                experimentManager.playBaseline(clip, from: soundsDirectory)
+                experimentManager.playBaseline(
+                    clip,
+                    from: soundsDirectory,
+                    reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+                )
             }
         }
     }
@@ -584,7 +588,11 @@ private struct MonitorVolumeExperimentCard: View {
         Task {
             await prepareForExperiment()
             await MainActor.run {
-                experimentManager.playMutedMonitor(clip, from: soundsDirectory)
+                experimentManager.playMutedMonitor(
+                    clip,
+                    from: soundsDirectory,
+                    reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+                )
             }
         }
     }
@@ -738,16 +746,34 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         return false
     }
 
-    func playBaseline(_ clip: SoundClip, from directory: URL) {
+    func playBaseline(
+        _ clip: SoundClip,
+        from directory: URL,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
         localMonitorVolume = 1
         bridgeSendVolume = 1
-        play(clip, from: directory, kind: .baseline)
+        play(
+            clip,
+            from: directory,
+            kind: .baseline,
+            reapplyInjectionPreference: reapplyInjectionPreference
+        )
     }
 
-    func playMutedMonitor(_ clip: SoundClip, from directory: URL) {
+    func playMutedMonitor(
+        _ clip: SoundClip,
+        from directory: URL,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
         localMonitorVolume = 0
         bridgeSendVolume = 1
-        play(clip, from: directory, kind: .mutedMonitor)
+        play(
+            clip,
+            from: directory,
+            kind: .mutedMonitor,
+            reapplyInjectionPreference: reapplyInjectionPreference
+        )
     }
 
     func stop() {
@@ -758,7 +784,8 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
     private func play(
         _ clip: SoundClip,
         from directory: URL,
-        kind: MonitorVolumeExperimentKind
+        kind: MonitorVolumeExperimentKind,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         let url = clip.fileURL(in: directory)
 
@@ -788,7 +815,7 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
             localPlayerNode.scheduleSegment(localAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
             bridgePlayerNode.scheduleSegment(bridgeAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
 
-            try configureAudioSession()
+            try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             try engine.start()
 
             self.engine = engine
@@ -859,10 +886,11 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         bridgeAudioFile = nil
     }
 
-    private func configureAudioSession() throws {
+    private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         try session.setActive(true)
+        try reapplyInjectionPreference?()
     }
 
     private func clamped(_ value: Double) -> Double {

@@ -73,24 +73,33 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         }
     }
 
-    func toggle(_ clip: SoundClip, from directory: URL, volume: Double) {
+    func toggle(
+        _ clip: SoundClip,
+        from directory: URL,
+        volume: Double,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
         setOutputVolume(volume)
 
         switch playbackState(for: clip.id) {
         case .playing:
             pause(clip)
         case .paused:
-            resume(clip)
+            resume(clip, reapplyInjectionPreference: reapplyInjectionPreference)
         case nil:
-            play(clip, from: directory)
+            play(clip, from: directory, reapplyInjectionPreference: reapplyInjectionPreference)
         }
     }
 
-    func play(_ clip: SoundClip, from directory: URL) {
+    func play(
+        _ clip: SoundClip,
+        from directory: URL,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
         let url = clip.fileURL(in: directory)
 
         do {
-            try configureAudioSession()
+            try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
 
             let player = try AVAudioPlayer(contentsOf: url)
             player.delegate = self
@@ -131,11 +140,14 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         refreshPlaybackProgress()
     }
 
-    func resume(_ clip: SoundClip) {
+    func resume(
+        _ clip: SoundClip,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
         guard let player = playersByClipID[clip.id], activeClipIDs.contains(clip.id) else { return }
 
         do {
-            try configureAudioSession()
+            try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             player.volume = outputVolume
             player.play()
             pausedClipIDs.remove(clip.id)
@@ -259,9 +271,10 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         currentClipID = activeClipIDs.first
     }
 
-    private func configureAudioSession() throws {
+    private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         try session.setActive(true)
+        try reapplyInjectionPreference?()
     }
 }

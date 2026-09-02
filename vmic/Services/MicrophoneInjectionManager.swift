@@ -244,7 +244,13 @@ final class MicrophoneInjectionManager: ObservableObject {
         pendingInjectionMode = enabled
 
         do {
-            try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
+            let session = AVAudioSession.sharedInstance()
+
+            if enabled {
+                try configureAudioSessionForInjection()
+            }
+
+            try session.setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
             lastInjectionModeChangeAt = Date()
             lastError = nil
@@ -259,6 +265,25 @@ final class MicrophoneInjectionManager: ObservableObject {
             isChangingInjectionMode = false
             pendingInjectionMode = nil
             return publishModeChangeResult(.failed(message: error.localizedDescription))
+        }
+    }
+
+    func reapplyInjectionPreferenceIfNeeded() throws {
+        guard isInjectionEnabled else { return }
+
+        if #available(iOS 18.2, *) {
+            do {
+                try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(.spokenAudio)
+                lastInjectionModeChangeAt = Date()
+                lastError = nil
+                refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
+                _ = publishModeChangeResult(.enabled(channelAvailable: isInjectionAvailableInCurrentCall))
+            } catch {
+                lastInjectionModeChangeAt = Date()
+                lastError = error.localizedDescription
+                _ = publishModeChangeResult(.failed(message: error.localizedDescription))
+                throw error
+            }
         }
     }
 
@@ -319,6 +344,13 @@ final class MicrophoneInjectionManager: ObservableObject {
         lastModeChangeResult = result
         lastModeChangeResultAt = Date()
         return result
+    }
+
+    @available(iOS 18.2, *)
+    private func configureAudioSessionForInjection() throws {
+        let session = AVAudioSession.sharedInstance()
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        try session.setActive(true)
     }
 
     private func debugValue(_ value: Bool?) -> String {
