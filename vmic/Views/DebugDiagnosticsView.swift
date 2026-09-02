@@ -224,6 +224,7 @@ struct DebugDiagnosticsView: View {
         .background(VmicTheme.appBackground)
         .navigationTitle(settingsStore.text(.debug))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 
     private func format(_ date: Date?) -> String {

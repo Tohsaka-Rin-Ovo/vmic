@@ -85,6 +85,7 @@ struct SettingsDrawer: View {
                     .buttonStyle(QuietIconButtonStyle())
                 }
             }
+            .vmicOpaqueNavigationBar()
         }
         .background(VmicTheme.drawerBackground)
     }
@@ -169,6 +170,7 @@ private struct ThemeSettingsView: View {
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.theme))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 
     private func title(_ theme: AppThemeMode) -> String {
@@ -214,6 +216,7 @@ private struct LanguageSettingsView: View {
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.language))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 }
 
@@ -238,6 +241,7 @@ private struct PlaybackSettingsView: View {
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.playback))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 }
 
@@ -260,6 +264,7 @@ private struct ListSettingsView: View {
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.list))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 }
 
@@ -301,6 +306,7 @@ private struct AboutSettingsView: View {
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.about))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
     }
 }
 

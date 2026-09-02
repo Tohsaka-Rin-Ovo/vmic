@@ -31,6 +31,11 @@ enum VmicTheme {
             ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 0.96)
             : UIColor(red: 0.96, green: 0.99, blue: 1.00, alpha: 0.98)
     })
+    static let navigationBarBackground = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 1)
+            : UIColor(red: 0.96, green: 0.99, blue: 1.00, alpha: 1)
+    })
     static let separator = Color(UIColor { traits in
         traits.userInterfaceStyle == .dark
             ? UIColor(red: 0.20, green: 0.28, blue: 0.40, alpha: 0.50)
@@ -87,5 +92,12 @@ struct QuietIconButtonStyle: ButtonStyle {
             .frame(width: 44, height: 44)
             .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: Circle())
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
+    }
+}
+
+extension View {
+    func vmicOpaqueNavigationBar() -> some View {
+        toolbarBackground(VmicTheme.navigationBarBackground, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
     }
 }

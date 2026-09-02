@@ -86,6 +86,7 @@ struct SoundboardView: View {
         }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 Button {
@@ -295,6 +296,7 @@ private struct AudioLibraryView: View {
         }
         .navigationTitle(settingsStore.text(.audioList))
         .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
                 if editMode.isEditing {
