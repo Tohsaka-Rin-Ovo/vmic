@@ -46,6 +46,26 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         return player.duration
     }
 
+    func seek(_ clip: SoundClip, toProgress progress: Double) {
+        seek(clipID: clip.id, toProgress: progress)
+    }
+
+    func seek(clipID: UUID, toProgress progress: Double) {
+        guard let player = playersByClipID[clipID] else { return }
+
+        let duration = player.duration
+        guard duration.isFinite, duration > 0 else { return }
+
+        let targetProgress = min(max(progress, 0), 1)
+        player.currentTime = duration * targetProgress
+        currentClipID = clipID
+        refreshPlaybackProgress()
+
+        if player.isPlaying {
+            startProgressTimerIfNeeded()
+        }
+    }
+
     func setOutputVolume(_ volume: Double) {
         outputVolume = Float(min(max(volume, 0), 1))
         playersByClipID.values.forEach { player in

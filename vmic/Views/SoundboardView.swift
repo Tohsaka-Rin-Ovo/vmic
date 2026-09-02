@@ -8,7 +8,7 @@ struct SoundboardView: View {
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    @State private var isImporterPresented = false
+    @State private var isAudioLibraryPresented = false
 
     private var activeClips: [SoundClip] {
         libraryStore.clips.filter {
@@ -31,7 +31,12 @@ struct SoundboardView: View {
 
             List {
                 Section {
-                    PlayerHeader(activeClips: activeClips)
+                    PlayerHeader(
+                        activeClips: activeClips,
+                        openAudioLibrary: {
+                            isAudioLibraryPresented = true
+                        }
+                    )
                         .listRowInsets(EdgeInsets(top: 10, leading: 16, bottom: 8, trailing: 16))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -69,8 +74,8 @@ struct SoundboardView: View {
                         stopAction: {
                             playbackManager.stop(currentClip)
                         },
-                        importAction: {
-                            isImporterPresented = true
+                        seekAction: { progress in
+                            playbackManager.seek(currentClip, toProgress: progress)
                         }
                     )
                     .padding(.horizontal, 16)
@@ -87,30 +92,8 @@ struct SoundboardView: View {
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)
         .vmicOpaqueNavigationBar()
-        .toolbar {
-            ToolbarItemGroup(placement: .topBarTrailing) {
-                Button {
-                    isImporterPresented = true
-                } label: {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(QuietIconButtonStyle())
-                .accessibilityLabel(settingsStore.text(.importAudio))
-            }
-        }
-        .fileImporter(
-            isPresented: $isImporterPresented,
-            allowedContentTypes: [.audio, .movie],
-            allowsMultipleSelection: true
-        ) { result in
-            switch result {
-            case .success(let urls):
-                Task {
-                    await libraryStore.importFiles(from: urls)
-                }
-            case .failure(let error):
-                libraryStore.lastError = error.localizedDescription
-            }
+        .navigationDestination(isPresented: $isAudioLibraryPresented) {
+            AudioLibraryView()
         }
     }
 
@@ -130,6 +113,7 @@ private struct PlayerHeader: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let activeClips: [SoundClip]
+    let openAudioLibrary: () -> Void
 
     private var title: String {
         activeClips.first?.title ?? settingsStore.text(.readyToBridgeAudio)
@@ -191,18 +175,16 @@ private struct PlayerHeader: View {
                     tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
                 )
 
-                Spacer(minLength: 0)
-
-                NavigationLink {
-                    AudioLibraryView()
-                } label: {
+                Button(action: openAudioLibrary) {
                     MiniStatus(
-                        title: settingsStore.text(.audioList),
+                        title: settingsStore.text(.audio),
                         systemImage: "list.bullet",
                         tint: VmicTheme.blue
                     )
                 }
+                .frame(maxWidth: .infinity)
                 .buttonStyle(.plain)
+                .accessibilityLabel(settingsStore.text(.audioList))
             }
         }
         .padding(18)
@@ -624,6 +606,7 @@ private struct MiniStatus: View {
             .foregroundStyle(tint)
             .lineLimit(1)
             .minimumScaleFactor(0.84)
+            .frame(maxWidth: .infinity, minHeight: 34)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -670,7 +653,7 @@ private struct BottomNowPlayingBar: View {
     let duration: TimeInterval?
     let togglePlayback: () -> Void
     let stopAction: () -> Void
-    let importAction: () -> Void
+    let seekAction: (Double) -> Void
 
     private var isPlaying: Bool {
         playbackState == .playing
@@ -703,12 +686,6 @@ private struct BottomNowPlayingBar: View {
                 }
                 .buttonStyle(CompactTransportButtonStyle())
 
-                Button(action: importAction) {
-                    Image(systemName: "plus")
-                }
-                .buttonStyle(CompactTransportButtonStyle())
-                .accessibilityLabel(settingsStore.text(.importAudio))
-
                 Button(action: stopAction) {
                     Image(systemName: "xmark")
                 }
@@ -718,7 +695,8 @@ private struct BottomNowPlayingBar: View {
             PlaybackProgressBar(
                 progress: progress,
                 elapsedTime: elapsedTime,
-                duration: duration
+                duration: duration,
+                seekAction: seekAction
             )
         }
         .padding(9)
@@ -734,9 +712,16 @@ private struct PlaybackProgressBar: View {
     let progress: Double
     let elapsedTime: TimeInterval
     let duration: TimeInterval?
+    let seekAction: (Double) -> Void
+
+    @State private var dragProgress: Double?
 
     private var clampedProgress: Double {
         min(max(progress, 0), 1)
+    }
+
+    private var displayedProgress: Double {
+        dragProgress ?? clampedProgress
     }
 
     var body: some View {
@@ -745,13 +730,34 @@ private struct PlaybackProgressBar: View {
                 ZStack(alignment: .leading) {
                     Capsule()
                         .fill(VmicTheme.blue.opacity(0.14))
+                        .frame(height: 4)
 
                     Capsule()
                         .fill(VmicTheme.blue)
-                        .frame(width: max(4, proxy.size.width * clampedProgress))
+                        .frame(width: max(4, proxy.size.width * displayedProgress), height: 4)
+
+                    Circle()
+                        .fill(VmicTheme.blue)
+                        .frame(width: 10, height: 10)
+                        .offset(x: knobOffset(width: proxy.size.width))
                 }
+                .frame(maxHeight: .infinity, alignment: .center)
+                .contentShape(Rectangle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { value in
+                            let progress = dragProgress(for: value.location.x, width: proxy.size.width)
+                            dragProgress = progress
+                            seekAction(progress)
+                        }
+                        .onEnded { value in
+                            let progress = dragProgress(for: value.location.x, width: proxy.size.width)
+                            seekAction(progress)
+                            dragProgress = nil
+                        }
+                )
             }
-            .frame(height: 4)
+            .frame(height: 20)
 
             HStack {
                 Text(formatTime(elapsedTime))
@@ -762,6 +768,16 @@ private struct PlaybackProgressBar: View {
             .foregroundStyle(VmicTheme.mutedInk)
             .monospacedDigit()
         }
+    }
+
+    private func dragProgress(for locationX: CGFloat, width: CGFloat) -> Double {
+        guard width > 0 else { return 0 }
+        return min(max(Double(locationX / width), 0), 1)
+    }
+
+    private func knobOffset(width: CGFloat) -> CGFloat {
+        let rawOffset = width * displayedProgress - 5
+        return min(max(rawOffset, 0), max(width - 10, 0))
     }
 
     private func formatTime(_ seconds: TimeInterval?) -> String {

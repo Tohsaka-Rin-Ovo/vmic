@@ -134,6 +134,7 @@ enum VmicText {
     case standby
     case live
     case local
+    case audio
     case audioList
     case noSounds
     case importAudio
@@ -424,6 +425,8 @@ final class AppSettingsStore: ObservableObject {
             return "实时"
         case .local:
             return "本地"
+        case .audio:
+            return "音频"
         case .audioList:
             return "音频列表"
         case .noSounds:
@@ -697,6 +700,8 @@ final class AppSettingsStore: ObservableObject {
             return "Live"
         case .local:
             return "Local"
+        case .audio:
+            return "Audio"
         case .audioList:
             return "Audio List"
         case .noSounds:
