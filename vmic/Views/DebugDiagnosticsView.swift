@@ -1,10 +1,33 @@
 import SwiftUI
 import UIKit
 
-enum DebugFocusTarget: Hashable {
+enum DebugFocusTarget: Hashable, Identifiable {
+    case overview
     case permission
     case channel
     case injectionSwitch
+
+    var id: String {
+        switch self {
+        case .overview:
+            return "overview"
+        case .permission:
+            return "permission"
+        case .channel:
+            return "channel"
+        case .injectionSwitch:
+            return "injectionSwitch"
+        }
+    }
+
+    var initialFocus: DebugFocusTarget? {
+        switch self {
+        case .overview:
+            return nil
+        case .permission, .channel, .injectionSwitch:
+            return self
+        }
+    }
 }
 
 struct DebugDiagnosticsView: View {
@@ -104,7 +127,7 @@ struct DebugDiagnosticsView: View {
     }
 
     private func scrollToInitialFocus(with proxy: ScrollViewProxy) {
-        guard let initialFocus else { return }
+        guard let initialFocus, initialFocus != .overview else { return }
 
         highlightedFocus = initialFocus
 

@@ -9,6 +9,7 @@ struct SoundboardView: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     @State private var isAudioLibraryPresented = false
+    @State private var debugDestination: DebugFocusTarget?
 
     private var activeClips: [SoundClip] {
         libraryStore.clips.filter {
@@ -41,7 +42,9 @@ struct SoundboardView: View {
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
 
-                    InjectionControlPanel()
+                    InjectionControlPanel { target in
+                        debugDestination = target
+                    }
                         .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16))
                         .listRowSeparator(.hidden)
                         .listRowBackground(Color.clear)
@@ -95,6 +98,9 @@ struct SoundboardView: View {
         .vmicOpaqueNavigationBar()
         .navigationDestination(isPresented: $isAudioLibraryPresented) {
             AudioLibraryView()
+        }
+        .navigationDestination(item: $debugDestination) { target in
+            DebugDiagnosticsView(initialFocus: target.initialFocus)
         }
     }
 

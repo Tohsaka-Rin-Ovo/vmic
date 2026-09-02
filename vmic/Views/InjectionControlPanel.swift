@@ -4,6 +4,8 @@ struct InjectionControlPanel: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let openDebug: (DebugFocusTarget) -> Void
+
     private var diagnosticText: String {
         if injectionManager.isInjectionAvailableInCurrentCall && injectionManager.isInjectionEnabled {
             return settingsStore.text(.diagnosticReady)
@@ -62,8 +64,8 @@ struct InjectionControlPanel: View {
             }
 
             HStack(spacing: 12) {
-                NavigationLink {
-                    DebugDiagnosticsView(initialFocus: .permission)
+                Button {
+                    openDebug(.permission)
                 } label: {
                     StatusPill(
                         title: settingsStore.text(.systemPermission),
@@ -76,8 +78,8 @@ struct InjectionControlPanel: View {
                 .frame(maxWidth: .infinity)
                 .accessibilityLabel(settingsStore.text(.systemPermission))
 
-                NavigationLink {
-                    DebugDiagnosticsView(initialFocus: .channel)
+                Button {
+                    openDebug(.channel)
                 } label: {
                     StatusPill(
                         title: settingsStore.text(.injectionChannel),
@@ -131,13 +133,14 @@ struct InjectionControlPanel: View {
                 InjectionModeResultBanner(result: result, timestamp: injectionManager.lastModeChangeResultAt)
             }
 
-            NavigationLink {
-                DebugDiagnosticsView()
+            Button {
+                openDebug(.overview)
             } label: {
                 Label(settingsStore.text(.debug), systemImage: "stethoscope")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(VmicTheme.blue)
             }
+            .buttonStyle(.plain)
         }
         .padding(16)
         .background(VmicTheme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
