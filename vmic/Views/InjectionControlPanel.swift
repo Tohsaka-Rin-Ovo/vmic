@@ -62,26 +62,50 @@ struct InjectionControlPanel: View {
             }
 
             HStack(spacing: 12) {
-                StatusPill(
-                    title: settingsStore.text(.systemPermission),
-                    value: injectionManager.permissionState.canEnableInjection ? settingsStore.text(.available) : settingsStore.text(.unavailable),
-                    systemImage: injectionManager.permissionState.canEnableInjection ? "checkmark.circle.fill" : "exclamationmark.circle",
-                    tint: injectionManager.permissionState.canEnableInjection ? VmicTheme.mint : VmicTheme.mutedInk
-                )
+                NavigationLink {
+                    DebugDiagnosticsView(initialFocus: .permission)
+                } label: {
+                    StatusPill(
+                        title: settingsStore.text(.systemPermission),
+                        value: injectionManager.permissionState.canEnableInjection ? settingsStore.text(.available) : settingsStore.text(.unavailable),
+                        systemImage: injectionManager.permissionState.canEnableInjection ? "checkmark.circle.fill" : "exclamationmark.circle",
+                        tint: injectionManager.permissionState.canEnableInjection ? VmicTheme.mint : VmicTheme.mutedInk
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel(settingsStore.text(.systemPermission))
 
-                StatusPill(
-                    title: settingsStore.text(.injectionChannel),
-                    value: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.available) : settingsStore.text(.unavailable),
-                    systemImage: injectionManager.isInjectionAvailableInCurrentCall ? "phone.fill" : "phone",
-                    tint: injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : VmicTheme.mutedInk
-                )
+                NavigationLink {
+                    DebugDiagnosticsView(initialFocus: .channel)
+                } label: {
+                    StatusPill(
+                        title: settingsStore.text(.injectionChannel),
+                        value: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.available) : settingsStore.text(.unavailable),
+                        systemImage: injectionManager.isInjectionAvailableInCurrentCall ? "phone.fill" : "phone",
+                        tint: injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : VmicTheme.mutedInk
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .accessibilityLabel(settingsStore.text(.injectionChannel))
 
-                StatusPill(
-                    title: settingsStore.text(.injectionSwitch),
-                    value: injectionManager.isInjectionEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
-                    systemImage: injectionManager.isInjectionEnabled ? "waveform.badge.plus" : "waveform",
-                    tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
-                )
+                Button {
+                    Task {
+                        await injectionManager.setInjectionEnabled(!injectionManager.isInjectionEnabled)
+                    }
+                } label: {
+                    StatusPill(
+                        title: settingsStore.text(.injectionSwitch),
+                        value: injectionManager.isInjectionEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
+                        systemImage: injectionManager.isInjectionEnabled ? "waveform.badge.plus" : "waveform",
+                        tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
+                    )
+                }
+                .buttonStyle(.plain)
+                .frame(maxWidth: .infinity)
+                .disabled(injectionManager.isChangingInjectionMode)
+                .accessibilityLabel(settingsStore.text(.injectionSwitch))
             }
 
             InputVolumeControl()
