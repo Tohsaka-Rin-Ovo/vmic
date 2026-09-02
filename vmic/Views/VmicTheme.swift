@@ -26,6 +26,16 @@ enum VmicTheme {
             ? UIColor(red: 0.07, green: 0.11, blue: 0.18, alpha: 0.88)
             : UIColor(white: 1, alpha: 0.86)
     })
+    static let drawerBackground = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.05, green: 0.09, blue: 0.16, alpha: 0.96)
+            : UIColor(red: 0.96, green: 0.99, blue: 1.00, alpha: 0.98)
+    })
+    static let separator = Color(UIColor { traits in
+        traits.userInterfaceStyle == .dark
+            ? UIColor(red: 0.20, green: 0.28, blue: 0.40, alpha: 0.50)
+            : UIColor(red: 0.75, green: 0.84, blue: 0.94, alpha: 0.55)
+    })
 
     static var appBackground: some View {
         LinearGradient(

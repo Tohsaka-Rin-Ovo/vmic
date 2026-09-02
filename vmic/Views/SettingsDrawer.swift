@@ -7,9 +7,9 @@ struct SettingsDrawer: View {
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    NavigationLink {
+            ScrollView {
+                VStack(spacing: 0) {
+                    SettingsNavigationRow {
                         ThemeSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -19,7 +19,7 @@ struct SettingsDrawer: View {
                         )
                     }
 
-                    NavigationLink {
+                    SettingsNavigationRow {
                         LanguageSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -29,7 +29,7 @@ struct SettingsDrawer: View {
                         )
                     }
 
-                    NavigationLink {
+                    SettingsNavigationRow {
                         PlaybackSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -39,7 +39,7 @@ struct SettingsDrawer: View {
                         )
                     }
 
-                    NavigationLink {
+                    SettingsNavigationRow {
                         ListSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -49,7 +49,7 @@ struct SettingsDrawer: View {
                         )
                     }
 
-                    NavigationLink {
+                    SettingsNavigationRow {
                         AboutSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -59,7 +59,7 @@ struct SettingsDrawer: View {
                         )
                     }
 
-                    NavigationLink {
+                    SettingsNavigationRow(showSeparator: false) {
                         DebugDiagnosticsView()
                     } label: {
                         SettingsLinkRow(
@@ -69,11 +69,12 @@ struct SettingsDrawer: View {
                         )
                     }
                 }
-                .listRowBackground(Color.clear)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 28)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
-            .background(VmicTheme.surface)
+            .scrollIndicators(.hidden)
+            .background(VmicTheme.drawerBackground)
             .navigationTitle(settingsStore.text(.settings))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -85,7 +86,7 @@ struct SettingsDrawer: View {
                 }
             }
         }
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
     }
 
     private func themeTitle(_ theme: AppThemeMode) -> String {
@@ -97,6 +98,43 @@ struct SettingsDrawer: View {
         case .dark:
             return settingsStore.text(.themeDark)
         }
+    }
+}
+
+private struct SettingsNavigationRow<Destination: View, Label: View>: View {
+    let showSeparator: Bool
+    let destination: () -> Destination
+    let label: () -> Label
+
+    init(
+        showSeparator: Bool = true,
+        @ViewBuilder _ destination: @escaping () -> Destination,
+        @ViewBuilder label: @escaping () -> Label
+    ) {
+        self.showSeparator = showSeparator
+        self.destination = destination
+        self.label = label
+    }
+
+    var body: some View {
+        NavigationLink {
+            destination()
+        } label: {
+            VStack(spacing: 0) {
+                label()
+                    .padding(.vertical, 12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                if showSeparator {
+                    Rectangle()
+                        .fill(VmicTheme.separator)
+                        .frame(height: 1)
+                        .padding(.leading, 46)
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -128,7 +166,7 @@ private struct ThemeSettingsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.theme))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -173,7 +211,7 @@ private struct LanguageSettingsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.language))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -195,7 +233,7 @@ private struct PlaybackSettingsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.playback))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -217,7 +255,7 @@ private struct ListSettingsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.list))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -258,7 +296,7 @@ private struct AboutSettingsView: View {
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
-        .background(VmicTheme.surface)
+        .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.about))
         .navigationBarTitleDisplayMode(.inline)
     }
@@ -272,7 +310,7 @@ private struct SettingsLinkRow: View {
     var body: some View {
         HStack(spacing: 12) {
             Image(systemName: systemImage)
-                .font(.headline.weight(.semibold))
+                .font(.subheadline.weight(.semibold))
                 .foregroundStyle(VmicTheme.blue)
                 .frame(width: 34, height: 34)
                 .background(VmicTheme.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -281,14 +319,22 @@ private struct SettingsLinkRow: View {
                 Text(title)
                     .font(.subheadline.weight(.semibold))
                     .foregroundStyle(VmicTheme.ink)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.82)
 
                 Text(detail)
                     .font(.caption)
                     .foregroundStyle(VmicTheme.mutedInk)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.82)
             }
+
+            Spacer(minLength: 6)
+
+            Image(systemName: "chevron.right")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(VmicTheme.mutedInk.opacity(0.62))
         }
-        .padding(.vertical, 7)
     }
 }
 

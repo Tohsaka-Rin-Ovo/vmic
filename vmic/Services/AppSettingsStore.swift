@@ -58,6 +58,47 @@ enum VmicText {
     case requestPermission
     case enableInjection
     case disableInjection
+    case turningOnInjection
+    case turningOffInjection
+    case enableInjectionHelp
+    case latestInjectionResult
+    case noInjectionResult
+    case audioSessionDiagnostics
+    case channelVerdict
+    case channelVerdictAvailable
+    case channelVerdictUnavailable
+    case channelVerdictUnsupported
+    case directChannelCheck
+    case notificationChannel
+    case currentCategory
+    case currentMode
+    case currentInputPorts
+    case currentOutputPorts
+    case currentInputDevices
+    case currentOutputDevices
+    case sampleRate
+    case inputChannels
+    case outputChannels
+    case lastRouteChange
+    case routeChangeReason
+    case notSupported
+    case emptyRoute
+    case copyChannelDiagnostics
+    case copiedChannelDiagnostics
+    case audioSessionDiagnosticsNote
+    case actionSucceeded
+    case actionNeedsAttention
+    case actionFailed
+    case actionUnsupportedOS(String)
+    case actionPermissionRequired
+    case actionServiceDisabled
+    case actionPermissionDenied
+    case actionPermissionUnknown
+    case actionEnableSucceeded
+    case actionEnableNoChannel
+    case actionDisableSucceeded
+    case actionModeChangeBusy
+    case actionModeChangeFailed(String)
     case openSystemSwitch
     case device
     case systemVersion
@@ -218,6 +259,88 @@ final class AppSettingsStore: ObservableObject {
             return "尝试开启注入"
         case .disableInjection:
             return "关闭注入"
+        case .turningOnInjection:
+            return "正在开启"
+        case .turningOffInjection:
+            return "正在关闭"
+        case .enableInjectionHelp:
+            return "此按钮在系统权限已授予后可用。它只负责请求 iOS 切到麦克风注入模式；当前通话是否真的能接入，还要看通话 App 是否提供 Apple 注入通道。"
+        case .latestInjectionResult:
+            return "最近注入结果"
+        case .noInjectionResult:
+            return "暂无操作结果"
+        case .audioSessionDiagnostics:
+            return "通道检测"
+        case .channelVerdict:
+            return "检测结论"
+        case .channelVerdictAvailable:
+            return "当前通话已暴露 Apple 麦克风注入通道。"
+        case .channelVerdictUnavailable:
+            return "当前通话未暴露 Apple 麦克风注入通道。若此时 KOOK 正在通话，软件层基本无法注入。"
+        case .channelVerdictUnsupported:
+            return "当前系统无法直接查询麦克风注入通道。"
+        case .directChannelCheck:
+            return "直接查询"
+        case .notificationChannel:
+            return "通知状态"
+        case .currentCategory:
+            return "Category"
+        case .currentMode:
+            return "Mode"
+        case .currentInputPorts:
+            return "输入端口"
+        case .currentOutputPorts:
+            return "输出端口"
+        case .currentInputDevices:
+            return "输入设备"
+        case .currentOutputDevices:
+            return "输出设备"
+        case .sampleRate:
+            return "采样率"
+        case .inputChannels:
+            return "输入声道"
+        case .outputChannels:
+            return "输出声道"
+        case .lastRouteChange:
+            return "上次路由变化"
+        case .routeChangeReason:
+            return "路由原因"
+        case .notSupported:
+            return "不支持"
+        case .emptyRoute:
+            return "无"
+        case .copyChannelDiagnostics:
+            return "复制通道诊断"
+        case .copiedChannelDiagnostics:
+            return "已复制"
+        case .audioSessionDiagnosticsNote:
+            return "Category 和 Mode 是 vmic 当前音频会话；通话是否可注入，以直接查询和系统通知为准。"
+        case .actionSucceeded:
+            return "操作已完成"
+        case .actionNeedsAttention:
+            return "需要处理"
+        case .actionFailed:
+            return "操作失败"
+        case .actionUnsupportedOS(let version):
+            return "当前系统是 iOS \(version)，麦克风注入需要 iOS 18.2 或更高版本。"
+        case .actionPermissionRequired:
+            return "vmic 还没有通话音频注入权限，请先请求权限。"
+        case .actionServiceDisabled:
+            return "系统的“通话中添加音频”总开关未开启，请先打开系统开关。"
+        case .actionPermissionDenied:
+            return "权限已被拒绝，请在系统设置中重新允许 vmic。"
+        case .actionPermissionUnknown:
+            return "系统返回了未知权限状态，请刷新后再试。"
+        case .actionEnableSucceeded:
+            return "已向 iOS 请求开启麦克风注入模式。"
+        case .actionEnableNoChannel:
+            return "已向 iOS 请求开启麦克风注入模式，但当前通话没有暴露可用注入通道。"
+        case .actionDisableSucceeded:
+            return "麦克风注入模式已关闭。"
+        case .actionModeChangeBusy:
+            return "上一轮注入模式切换还在处理中，请等待当前操作完成。"
+        case .actionModeChangeFailed(let message):
+            return "系统拒绝了这次切换：\(message)"
         case .openSystemSwitch:
             return "打开系统开关"
         case .device:
@@ -401,6 +524,88 @@ final class AppSettingsStore: ObservableObject {
             return "Try Enable Injection"
         case .disableInjection:
             return "Disable Injection"
+        case .turningOnInjection:
+            return "Turning On"
+        case .turningOffInjection:
+            return "Turning Off"
+        case .enableInjectionHelp:
+            return "This action becomes available after system permission is granted. It only asks iOS to switch to microphone injection mode; the current call must still expose Apple's injection channel."
+        case .latestInjectionResult:
+            return "Latest Injection Result"
+        case .noInjectionResult:
+            return "No result yet"
+        case .audioSessionDiagnostics:
+            return "Channel Check"
+        case .channelVerdict:
+            return "Verdict"
+        case .channelVerdictAvailable:
+            return "The current call exposes Apple's microphone injection channel."
+        case .channelVerdictUnavailable:
+            return "The current call does not expose Apple's microphone injection channel. If KOOK is in a call now, software injection is probably unavailable."
+        case .channelVerdictUnsupported:
+            return "This system cannot directly query microphone injection availability."
+        case .directChannelCheck:
+            return "Direct Query"
+        case .notificationChannel:
+            return "Notification"
+        case .currentCategory:
+            return "Category"
+        case .currentMode:
+            return "Mode"
+        case .currentInputPorts:
+            return "Input Ports"
+        case .currentOutputPorts:
+            return "Output Ports"
+        case .currentInputDevices:
+            return "Input Devices"
+        case .currentOutputDevices:
+            return "Output Devices"
+        case .sampleRate:
+            return "Sample Rate"
+        case .inputChannels:
+            return "Input Channels"
+        case .outputChannels:
+            return "Output Channels"
+        case .lastRouteChange:
+            return "Last Route Change"
+        case .routeChangeReason:
+            return "Route Reason"
+        case .notSupported:
+            return "Unsupported"
+        case .emptyRoute:
+            return "None"
+        case .copyChannelDiagnostics:
+            return "Copy Channel Diagnostics"
+        case .copiedChannelDiagnostics:
+            return "Copied"
+        case .audioSessionDiagnosticsNote:
+            return "Category and mode are vmic's current audio session. Use the direct query and system notification as the call injection verdict."
+        case .actionSucceeded:
+            return "Done"
+        case .actionNeedsAttention:
+            return "Needs Attention"
+        case .actionFailed:
+            return "Failed"
+        case .actionUnsupportedOS(let version):
+            return "This iPhone is running iOS \(version). Microphone injection requires iOS 18.2 or later."
+        case .actionPermissionRequired:
+            return "vmic does not have call audio injection permission yet. Request permission first."
+        case .actionServiceDisabled:
+            return "Add Audio in Calls is off in system settings. Open the system switch first."
+        case .actionPermissionDenied:
+            return "Permission was denied. Allow vmic again in system settings."
+        case .actionPermissionUnknown:
+            return "The system returned an unknown permission state. Refresh and try again."
+        case .actionEnableSucceeded:
+            return "iOS accepted the request to turn on microphone injection mode."
+        case .actionEnableNoChannel:
+            return "iOS accepted the request, but the current call has not exposed an available injection channel."
+        case .actionDisableSucceeded:
+            return "Microphone injection mode is off."
+        case .actionModeChangeBusy:
+            return "A microphone injection mode change is already in progress. Wait for it to finish."
+        case .actionModeChangeFailed(let message):
+            return "The system rejected this change: \(message)"
         case .openSystemSwitch:
             return "Open System Switch"
         case .device:

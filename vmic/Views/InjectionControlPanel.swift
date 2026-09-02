@@ -58,7 +58,7 @@ struct InjectionControlPanel: View {
                 ))
                 .labelsHidden()
                 .tint(VmicTheme.blue)
-                .disabled(!injectionManager.permissionState.canEnableInjection)
+                .disabled(!injectionManager.permissionState.canEnableInjection || injectionManager.isChangingInjectionMode)
             }
 
             HStack(spacing: 12) {
@@ -88,6 +88,22 @@ struct InjectionControlPanel: View {
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(VmicTheme.mutedInk)
                 .fixedSize(horizontal: false, vertical: true)
+
+            if let pendingMode = injectionManager.pendingInjectionMode {
+                HStack(spacing: 10) {
+                    ProgressView()
+                        .controlSize(.small)
+
+                    Text(settingsStore.text(pendingMode ? .turningOnInjection : .turningOffInjection))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(VmicTheme.ink)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(VmicTheme.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            } else if let result = injectionManager.lastModeChangeResult {
+                InjectionModeResultBanner(result: result, timestamp: injectionManager.lastModeChangeResultAt)
+            }
 
             NavigationLink {
                 DebugDiagnosticsView()
