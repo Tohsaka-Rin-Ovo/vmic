@@ -8,11 +8,7 @@ struct SoundboardView: View {
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    @State private var editMode: EditMode = .inactive
     @State private var isImporterPresented = false
-    @State private var clipBeingRenamed: SoundClip?
-    @State private var renameText = ""
-    @State private var showsSortingNotice = false
 
     private var activeClips: [SoundClip] {
         libraryStore.clips.filter {
@@ -52,49 +48,7 @@ struct SoundboardView: View {
                             .listRowBackground(Color.clear)
                     }
                 }
-
-                if libraryStore.clips.isEmpty {
-                    Section {
-                        EmptySoundboardView(importAction: {
-                            isImporterPresented = true
-                        })
-                        .listRowInsets(EdgeInsets(top: 18, leading: 16, bottom: 18, trailing: 16))
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                    }
-                } else {
-                    Section {
-                        ForEach(libraryStore.clips) { clip in
-                            AudioListRow(
-                                clip: clip,
-                                artworkDirectory: libraryStore.artworkDirectory,
-                                playbackState: playbackManager.playbackState(for: clip.id),
-                                play: {
-                                    togglePlayback(clip)
-                                },
-                                rename: {
-                                    clipBeingRenamed = clip
-                                    renameText = clip.title
-                                },
-                                remove: {
-                                    libraryStore.delete(clip)
-                                }
-                            )
-                            .onLongPressGesture {
-                                withAnimation(.easeInOut(duration: 0.2)) {
-                                    editMode = .active
-                                    showsSortingNotice = true
-                                }
-                            }
-                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
-                            .listRowSeparator(.hidden)
-                            .listRowBackground(Color.clear)
-                        }
-                        .onMove(perform: libraryStore.move)
-                    }
-                }
             }
-            .environment(\.editMode, $editMode)
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
             .padding(.bottom, currentClip == nil ? 0 : 84)
@@ -106,7 +60,9 @@ struct SoundboardView: View {
                         clip: currentClip,
                         artworkDirectory: libraryStore.artworkDirectory,
                         playbackState: playbackManager.playbackState(for: currentClip.id),
-                        volume: $settingsStore.inputVolume,
+                        progress: playbackManager.playbackProgress(for: currentClip.id),
+                        elapsedTime: playbackManager.elapsedTime(for: currentClip.id),
+                        duration: playbackManager.duration(for: currentClip.id) ?? currentClip.durationSeconds,
                         togglePlayback: {
                             togglePlayback(currentClip)
                         },
@@ -121,25 +77,6 @@ struct SoundboardView: View {
                     .padding(.bottom, 10)
                 }
             }
-
-            if showsSortingNotice {
-                VStack {
-                    Text(settingsStore.text(.sortingEnabled))
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 14)
-                        .padding(.vertical, 8)
-                        .background(VmicTheme.ink.opacity(0.88), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-                        .padding(.top, 8)
-
-                    Spacer()
-                }
-                .transition(.opacity)
-                .task {
-                    try? await Task.sleep(nanoseconds: 1_400_000_000)
-                    showsSortingNotice = false
-                }
-            }
         }
         .task {
             playbackManager.setOutputVolume(settingsStore.inputVolume)
@@ -151,14 +88,6 @@ struct SoundboardView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItemGroup(placement: .topBarTrailing) {
-                if editMode.isEditing {
-                    Button(settingsStore.text(.done)) {
-                        withAnimation(.easeInOut(duration: 0.2)) {
-                            editMode = .inactive
-                        }
-                    }
-                }
-
                 Button {
                     isImporterPresented = true
                 } label: {
@@ -180,32 +109,6 @@ struct SoundboardView: View {
                 }
             case .failure(let error):
                 libraryStore.lastError = error.localizedDescription
-            }
-        }
-        .alert(settingsStore.text(.renameAudio), isPresented: Binding(
-            get: {
-                clipBeingRenamed != nil
-            },
-            set: { isPresented in
-                if !isPresented {
-                    clipBeingRenamed = nil
-                    renameText = ""
-                }
-            }
-        )) {
-            TextField(settingsStore.text(.audioName), text: $renameText)
-
-            Button(settingsStore.text(.cancel), role: .cancel) {
-                clipBeingRenamed = nil
-                renameText = ""
-            }
-
-            Button(settingsStore.text(.save)) {
-                if let clip = clipBeingRenamed {
-                    libraryStore.rename(clip, to: renameText)
-                }
-                clipBeingRenamed = nil
-                renameText = ""
             }
         }
     }
@@ -286,6 +189,19 @@ private struct PlayerHeader: View {
                     systemImage: injectionManager.isInjectionEnabled ? "dot.radiowaves.left.and.right" : "speaker.wave.2",
                     tint: injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
                 )
+
+                Spacer(minLength: 0)
+
+                NavigationLink {
+                    AudioLibraryView()
+                } label: {
+                    MiniStatus(
+                        title: settingsStore.text(.audioList),
+                        systemImage: "list.bullet",
+                        tint: VmicTheme.blue
+                    )
+                }
+                .buttonStyle(.plain)
             }
         }
         .padding(18)
@@ -294,6 +210,158 @@ private struct PlayerHeader: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.72), lineWidth: 1)
         }
+    }
+}
+
+private struct AudioLibraryView: View {
+    @EnvironmentObject private var libraryStore: SoundLibraryStore
+    @EnvironmentObject private var playbackManager: AudioPlaybackManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    @State private var editMode: EditMode = .inactive
+    @State private var isImporterPresented = false
+    @State private var clipBeingRenamed: SoundClip?
+    @State private var renameText = ""
+    @State private var showsSortingNotice = false
+
+    var body: some View {
+        ZStack {
+            VmicTheme.appBackground
+
+            List {
+                if libraryStore.clips.isEmpty {
+                    Section {
+                        EmptySoundboardView(importAction: {
+                            isImporterPresented = true
+                        })
+                        .listRowInsets(EdgeInsets(top: 24, leading: 16, bottom: 24, trailing: 16))
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                    }
+                } else {
+                    Section {
+                        ForEach(libraryStore.clips) { clip in
+                            AudioListRow(
+                                clip: clip,
+                                artworkDirectory: libraryStore.artworkDirectory,
+                                playbackState: playbackManager.playbackState(for: clip.id),
+                                play: {
+                                    togglePlayback(clip)
+                                },
+                                rename: {
+                                    clipBeingRenamed = clip
+                                    renameText = clip.title
+                                },
+                                remove: {
+                                    libraryStore.delete(clip)
+                                }
+                            )
+                            .onLongPressGesture {
+                                withAnimation(.easeInOut(duration: 0.2)) {
+                                    editMode = .active
+                                    showsSortingNotice = true
+                                }
+                            }
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 12))
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                        }
+                        .onMove(perform: libraryStore.move)
+                    }
+                }
+            }
+            .environment(\.editMode, $editMode)
+            .listStyle(.plain)
+            .scrollContentBackground(.hidden)
+
+            if showsSortingNotice {
+                VStack {
+                    Text(settingsStore.text(.sortingEnabled))
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(VmicTheme.ink.opacity(0.88), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                        .padding(.top, 8)
+
+                    Spacer()
+                }
+                .transition(.opacity)
+                .task {
+                    try? await Task.sleep(nanoseconds: 1_400_000_000)
+                    showsSortingNotice = false
+                }
+            }
+        }
+        .navigationTitle(settingsStore.text(.audioList))
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItemGroup(placement: .topBarTrailing) {
+                if editMode.isEditing {
+                    Button(settingsStore.text(.done)) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            editMode = .inactive
+                        }
+                    }
+                }
+
+                Button {
+                    isImporterPresented = true
+                } label: {
+                    Image(systemName: "plus")
+                }
+                .buttonStyle(QuietIconButtonStyle())
+                .accessibilityLabel(settingsStore.text(.importAudio))
+            }
+        }
+        .fileImporter(
+            isPresented: $isImporterPresented,
+            allowedContentTypes: [.audio, .movie],
+            allowsMultipleSelection: true
+        ) { result in
+            switch result {
+            case .success(let urls):
+                Task {
+                    await libraryStore.importFiles(from: urls)
+                }
+            case .failure(let error):
+                libraryStore.lastError = error.localizedDescription
+            }
+        }
+        .alert(settingsStore.text(.renameAudio), isPresented: Binding(
+            get: {
+                clipBeingRenamed != nil
+            },
+            set: { isPresented in
+                if !isPresented {
+                    clipBeingRenamed = nil
+                    renameText = ""
+                }
+            }
+        )) {
+            TextField(settingsStore.text(.audioName), text: $renameText)
+
+            Button(settingsStore.text(.cancel), role: .cancel) {
+                clipBeingRenamed = nil
+                renameText = ""
+            }
+
+            Button(settingsStore.text(.save)) {
+                if let clip = clipBeingRenamed {
+                    libraryStore.rename(clip, to: renameText)
+                }
+                clipBeingRenamed = nil
+                renameText = ""
+            }
+        }
+    }
+
+    private func togglePlayback(_ clip: SoundClip) {
+        if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
+            playbackManager.stopAll()
+        }
+
+        playbackManager.toggle(clip, from: libraryStore.soundsDirectory, volume: settingsStore.inputVolume)
     }
 }
 
@@ -552,6 +620,8 @@ private struct MiniStatus: View {
         Label(title, systemImage: systemImage)
             .font(.caption.weight(.semibold))
             .foregroundStyle(tint)
+            .lineLimit(1)
+            .minimumScaleFactor(0.84)
             .padding(.horizontal, 10)
             .padding(.vertical, 7)
             .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -593,7 +663,9 @@ private struct BottomNowPlayingBar: View {
     let clip: SoundClip
     let artworkDirectory: URL
     let playbackState: SoundPlaybackState?
-    @Binding var volume: Double
+    let progress: Double
+    let elapsedTime: TimeInterval
+    let duration: TimeInterval?
     let togglePlayback: () -> Void
     let stopAction: () -> Void
     let importAction: () -> Void
@@ -627,7 +699,7 @@ private struct BottomNowPlayingBar: View {
                 Button(action: togglePlayback) {
                     Image(systemName: isPlaying ? "pause.fill" : "play.fill")
                 }
-                .buttonStyle(TransportIconButtonStyle(isActive: true))
+                .buttonStyle(CompactTransportButtonStyle())
 
                 Button(action: importAction) {
                     Image(systemName: "plus")
@@ -641,20 +713,11 @@ private struct BottomNowPlayingBar: View {
                 .buttonStyle(CompactTransportButtonStyle())
             }
 
-            HStack(spacing: 8) {
-                Image(systemName: "speaker.wave.1")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(VmicTheme.mutedInk)
-
-                Slider(value: $volume, in: 0...1)
-                    .tint(VmicTheme.blue)
-
-                Text(settingsStore.text(.volumePercent(Int((volume * 100).rounded()))))
-                    .font(.caption2.weight(.semibold))
-                    .foregroundStyle(VmicTheme.mutedInk)
-                    .monospacedDigit()
-                    .frame(width: 38, alignment: .trailing)
-            }
+            PlaybackProgressBar(
+                progress: progress,
+                elapsedTime: elapsedTime,
+                duration: duration
+            )
         }
         .padding(9)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
@@ -665,29 +728,57 @@ private struct BottomNowPlayingBar: View {
     }
 }
 
+private struct PlaybackProgressBar: View {
+    let progress: Double
+    let elapsedTime: TimeInterval
+    let duration: TimeInterval?
+
+    private var clampedProgress: Double {
+        min(max(progress, 0), 1)
+    }
+
+    var body: some View {
+        VStack(spacing: 5) {
+            GeometryReader { proxy in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(VmicTheme.blue.opacity(0.14))
+
+                    Capsule()
+                        .fill(VmicTheme.blue)
+                        .frame(width: max(4, proxy.size.width * clampedProgress))
+                }
+            }
+            .frame(height: 4)
+
+            HStack {
+                Text(formatTime(elapsedTime))
+                Spacer()
+                Text(formatTime(duration))
+            }
+            .font(.caption2.weight(.medium))
+            .foregroundStyle(VmicTheme.mutedInk)
+            .monospacedDigit()
+        }
+    }
+
+    private func formatTime(_ seconds: TimeInterval?) -> String {
+        guard let seconds, seconds.isFinite, seconds >= 0 else {
+            return "--:--"
+        }
+
+        let totalSeconds = Int(seconds.rounded())
+        return String(format: "%02d:%02d", totalSeconds / 60, totalSeconds % 60)
+    }
+}
+
 private struct CompactTransportButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.subheadline.weight(.bold))
             .foregroundStyle(VmicTheme.blue)
-            .frame(width: 34, height: 34)
+            .frame(width: 36, height: 36)
             .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
-            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
-    }
-}
-
-private struct TransportIconButtonStyle: ButtonStyle {
-    let isActive: Bool
-
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.headline.weight(.bold))
-            .foregroundStyle(isActive ? Color.white : VmicTheme.mutedInk)
-            .frame(width: 48, height: 48)
-            .background(
-                isActive ? VmicTheme.ink.opacity(configuration.isPressed ? 0.84 : 1) : Color.white.opacity(0.72),
-                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
-            )
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }
