@@ -129,6 +129,9 @@ enum VmicText {
     case readyToBridgeAudio
     case soundsPlaying(Int)
     case injectionEnabled
+    case bridgeAudioReady
+    case clipPlaying(String)
+    case clipPaused(String)
     case selectSoundToPlay
     case call
     case standby
@@ -415,6 +418,12 @@ final class AppSettingsStore: ObservableObject {
             return "\(count) 个音频播放中"
         case .injectionEnabled:
             return "通话注入已开启"
+        case .bridgeAudioReady:
+            return "桥接音频已就绪"
+        case .clipPlaying(let title):
+            return "\(title) 播放中"
+        case .clipPaused(let title):
+            return "\(title) 已暂停"
         case .selectSoundToPlay:
             return "选择一个音频播放"
         case .call:
@@ -690,6 +699,12 @@ final class AppSettingsStore: ObservableObject {
             return "\(count) sounds playing"
         case .injectionEnabled:
             return "Injection enabled"
+        case .bridgeAudioReady:
+            return "Bridge audio ready"
+        case .clipPlaying(let title):
+            return "\(title) playing"
+        case .clipPaused(let title):
+            return "\(title) paused"
         case .selectSoundToPlay:
             return "Select a sound to play"
         case .call:

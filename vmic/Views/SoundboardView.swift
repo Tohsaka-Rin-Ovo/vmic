@@ -32,7 +32,7 @@ struct SoundboardView: View {
             List {
                 Section {
                     PlayerHeader(
-                        activeClips: activeClips,
+                        currentClip: currentClip,
                         openAudioLibrary: {
                             isAudioLibraryPresented = true
                         }
@@ -112,27 +112,27 @@ private struct PlayerHeader: View {
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    let activeClips: [SoundClip]
+    let currentClip: SoundClip?
     let openAudioLibrary: () -> Void
 
     private var title: String {
-        activeClips.first?.title ?? settingsStore.text(.readyToBridgeAudio)
+        currentClip == nil ? settingsStore.text(.readyToBridgeAudio) : settingsStore.text(.bridgeAudioReady)
     }
 
     private var subtitle: String {
-        if activeClips.count > 1 {
-            return settingsStore.text(.soundsPlaying(activeClips.count))
+        guard let currentClip else {
+            return settingsStore.text(.selectSoundToPlay)
         }
 
-        if injectionManager.isInjectionEnabled {
-            return settingsStore.text(.injectionEnabled)
+        if playbackManager.playbackState(for: currentClip.id) == .paused {
+            return settingsStore.text(.clipPaused(currentClip.title))
         }
 
-        return settingsStore.text(.selectSoundToPlay)
+        return settingsStore.text(.clipPlaying(currentClip.title))
     }
 
     private var isTitlePlaying: Bool {
-        guard let clip = activeClips.first else { return false }
+        guard let clip = currentClip else { return false }
         return playbackManager.playbackState(for: clip.id) == .playing
     }
 
@@ -140,24 +140,34 @@ private struct PlayerHeader: View {
         VStack(alignment: .leading, spacing: 20) {
             HStack(alignment: .center, spacing: 18) {
                 CoverArtworkView(
-                    artworkURL: activeClips.first?.artworkURL(in: libraryStore.artworkDirectory),
+                    artworkURL: currentClip?.artworkURL(in: libraryStore.artworkDirectory),
                     size: 104
                 )
 
-                VStack(alignment: .leading, spacing: 8) {
-                    MarqueeText(
-                        title,
-                        font: .title2.weight(.bold),
-                        color: VmicTheme.ink,
-                        isActive: isTitlePlaying
-                    )
-                    .frame(height: 34, alignment: .center)
+                Button(action: openAudioLibrary) {
+                    VStack(alignment: .leading, spacing: 8) {
+                        MarqueeText(
+                            title,
+                            font: .title2.weight(.bold),
+                            color: VmicTheme.ink,
+                            isActive: isTitlePlaying
+                        )
+                        .frame(height: 34, alignment: .center)
 
-                    Text(subtitle)
-                        .font(.subheadline.weight(.medium))
-                        .foregroundStyle(VmicTheme.mutedInk)
-                        .lineLimit(1)
+                        MarqueeText(
+                            subtitle,
+                            font: .subheadline.weight(.medium),
+                            color: VmicTheme.mutedInk,
+                            isActive: isTitlePlaying
+                        )
+                        .frame(height: 21, alignment: .center)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .contentShape(Rectangle())
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .buttonStyle(.plain)
+                .accessibilityLabel(settingsStore.text(.audioList))
 
                 Spacer(minLength: 0)
             }
