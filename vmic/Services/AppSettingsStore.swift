@@ -47,6 +47,18 @@ enum VmicText {
     case debug
     case monitorVolumeExperiment
     case monitorVolumeExperimentDetail
+    case officialSpeechProbe
+    case officialSpeechProbeDetail
+    case speechProbePhraseLabel
+    case speechProbePhrase
+    case playSpeechProbe
+    case stopSpeechProbe
+    case speechProbeReady
+    case speechProbeRunning
+    case speechProbeFinished
+    case speechProbeStopped
+    case speechProbeFailed(String)
+    case speechProbeInstruction
     case experimentAudio
     case experimentNoAudio
     case localMonitorVolume
@@ -89,6 +101,7 @@ enum VmicText {
     case notificationChannel
     case currentCategory
     case currentMode
+    case preferredInjectionMode
     case currentInputPorts
     case currentOutputPorts
     case currentInputDevices
@@ -271,6 +284,30 @@ final class AppSettingsStore: ObservableObject {
             return "监听验证"
         case .monitorVolumeExperimentDetail:
             return "验证本机监听音量能否与桥接发送音量分离。"
+        case .officialSpeechProbe:
+            return "官方语音对照"
+        case .officialSpeechProbeDetail:
+            return "使用 Apple 示例同款 TTS 路径验证通话音频注入是否真的生效。"
+        case .speechProbePhraseLabel:
+            return "测试文案"
+        case .speechProbePhrase:
+            return "这是一段 vmic 官方语音对照测试，请确认通话另一端是否能清楚听到。"
+        case .playSpeechProbe:
+            return "播放语音"
+        case .stopSpeechProbe:
+            return "停止语音"
+        case .speechProbeReady:
+            return "等待播放官方语音。"
+        case .speechProbeRunning:
+            return "官方语音播放中，请询问对方是否听到清晰的线路音频。"
+        case .speechProbeFinished:
+            return "官方语音已结束。"
+        case .speechProbeStopped:
+            return "官方语音已停止。"
+        case .speechProbeFailed(let message):
+            return "语音测试失败：\(message)"
+        case .speechProbeInstruction:
+            return "判断顺序：先在 FaceTime 测这个语音，再测 KOOK。如果 FaceTime 能听到但 KOOK 听不到，说明 KOOK 通话链路不兼容；如果语音能听到但文件音频不行，问题集中在文件播放链路。"
         case .experimentAudio:
             return "测试音频"
         case .experimentNoAudio:
@@ -355,6 +392,8 @@ final class AppSettingsStore: ObservableObject {
             return "Category"
         case .currentMode:
             return "Mode"
+        case .preferredInjectionMode:
+            return "期望注入模式"
         case .currentInputPorts:
             return "输入端口"
         case .currentOutputPorts:
@@ -586,6 +625,30 @@ final class AppSettingsStore: ObservableObject {
             return "Monitor Check"
         case .monitorVolumeExperimentDetail:
             return "Checks whether local monitoring can be separated from bridge send volume."
+        case .officialSpeechProbe:
+            return "Official Speech Probe"
+        case .officialSpeechProbeDetail:
+            return "Uses the same TTS path as Apple's sample to verify whether call audio injection is actually working."
+        case .speechProbePhraseLabel:
+            return "Test Phrase"
+        case .speechProbePhrase:
+            return "This is a vmic official speech probe. Please confirm whether the other side can hear it clearly."
+        case .playSpeechProbe:
+            return "Play Speech"
+        case .stopSpeechProbe:
+            return "Stop Speech"
+        case .speechProbeReady:
+            return "Waiting to play the official speech probe."
+        case .speechProbeRunning:
+            return "Official speech is playing. Ask the other side whether they hear a clean injected signal."
+        case .speechProbeFinished:
+            return "Official speech finished."
+        case .speechProbeStopped:
+            return "Official speech stopped."
+        case .speechProbeFailed(let message):
+            return "Speech probe failed: \(message)"
+        case .speechProbeInstruction:
+            return "Recommended order: test this speech in FaceTime first, then KOOK. If FaceTime works but KOOK does not, KOOK is incompatible. If speech works but files do not, focus on the file playback path."
         case .experimentAudio:
             return "Test Audio"
         case .experimentNoAudio:
@@ -670,6 +733,8 @@ final class AppSettingsStore: ObservableObject {
             return "Category"
         case .currentMode:
             return "Mode"
+        case .preferredInjectionMode:
+            return "Preferred Injection"
         case .currentInputPorts:
             return "Input Ports"
         case .currentOutputPorts:

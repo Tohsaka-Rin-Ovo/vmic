@@ -74,6 +74,7 @@ struct AudioSessionDiagnostics: Equatable {
     let capturedAt: Date
     let category: String
     let mode: String
+    let preferredMicrophoneInjectionMode: String?
     let microphoneInjectionAvailable: Bool?
     let inputPortTypes: [String]
     let outputPortTypes: [String]
@@ -89,17 +90,21 @@ struct AudioSessionDiagnostics: Equatable {
         let session = AVAudioSession.sharedInstance()
         let currentRoute = session.currentRoute
         let microphoneInjectionAvailable: Bool?
+        let preferredMicrophoneInjectionMode: String?
 
         if #available(iOS 18.2, *) {
             microphoneInjectionAvailable = session.isMicrophoneInjectionAvailable
+            preferredMicrophoneInjectionMode = Self.microphoneInjectionModeDescription(session.preferredMicrophoneInjectionMode)
         } else {
             microphoneInjectionAvailable = nil
+            preferredMicrophoneInjectionMode = nil
         }
 
         return AudioSessionDiagnostics(
             capturedAt: Date(),
             category: session.category.rawValue,
             mode: session.mode.rawValue,
+            preferredMicrophoneInjectionMode: preferredMicrophoneInjectionMode,
             microphoneInjectionAvailable: microphoneInjectionAvailable,
             inputPortTypes: currentRoute.inputs.map { $0.portType.rawValue },
             outputPortTypes: currentRoute.outputs.map { $0.portType.rawValue },
@@ -111,6 +116,18 @@ struct AudioSessionDiagnostics: Equatable {
             lastRouteChangeReason: lastRouteChangeReason,
             lastRouteChangeAt: lastRouteChangeAt
         )
+    }
+
+    @available(iOS 18.2, *)
+    private static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
+        switch mode {
+        case .none:
+            return "none"
+        case .spokenAudio:
+            return "spokenAudio"
+        @unknown default:
+            return "unknown(\(mode.rawValue))"
+        }
     }
 }
 
@@ -128,6 +145,7 @@ final class MicrophoneInjectionManager: ObservableObject {
     @Published private(set) var lastRefreshAt: Date?
     @Published private(set) var lastCapabilitiesChangeAt: Date?
     @Published private(set) var lastInjectionModeChangeAt: Date?
+    @Published private(set) var lastMediaServicesResetAt: Date?
     @Published private(set) var lastRouteChangeAt: Date?
     @Published private(set) var lastRouteChangeReason: String?
     @Published var lastError: String?
@@ -136,6 +154,7 @@ final class MicrophoneInjectionManager: ObservableObject {
         [
             "当前 AVAudioSession Category: \(audioSessionDiagnostics.category)",
             "当前 Mode: \(audioSessionDiagnostics.mode)",
+            "期望注入模式: \(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")",
             "麦克风注入是否可用: \(debugValue(audioSessionDiagnostics.microphoneInjectionAvailable))",
             "通知通道状态: \(debugValue(lastNotifiedInjectionAvailability))",
             "当前输入端口: \(audioSessionDiagnostics.inputPortTypes)",
@@ -148,6 +167,7 @@ final class MicrophoneInjectionManager: ObservableObject {
             "权限状态: \(debugValue(permissionState))",
             "注入开关: \(isInjectionEnabled)",
             "上次通道事件: \(debugValue(lastCapabilitiesChangeAt))",
+            "上次媒体服务重置: \(debugValue(lastMediaServicesResetAt))",
             "上次路由变化: \(debugValue(lastRouteChangeAt))",
             "路由变化原因: \(lastRouteChangeReason ?? "none")"
         ].joined(separator: "\n")
@@ -155,6 +175,7 @@ final class MicrophoneInjectionManager: ObservableObject {
 
     private var capabilitiesObserverTask: Task<Void, Never>?
     private var routeObserverTask: Task<Void, Never>?
+    private var mediaServicesObserverTask: Task<Void, Never>?
 
     init() {
         capabilitiesObserverTask = Task { [weak self] in
@@ -163,11 +184,15 @@ final class MicrophoneInjectionManager: ObservableObject {
         routeObserverTask = Task { [weak self] in
             await self?.observeRouteChanges()
         }
+        mediaServicesObserverTask = Task { [weak self] in
+            await self?.observeMediaServicesReset()
+        }
     }
 
     deinit {
         capabilitiesObserverTask?.cancel()
         routeObserverTask?.cancel()
+        mediaServicesObserverTask?.cancel()
     }
 
     func refresh(printDiagnostics: Bool = false) async {
@@ -244,13 +269,7 @@ final class MicrophoneInjectionManager: ObservableObject {
         pendingInjectionMode = enabled
 
         do {
-            let session = AVAudioSession.sharedInstance()
-
-            if enabled {
-                try configureAudioSessionForInjection()
-            }
-
-            try session.setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
+            try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
             lastInjectionModeChangeAt = Date()
             lastError = nil
@@ -340,17 +359,27 @@ final class MicrophoneInjectionManager: ObservableObject {
         }
     }
 
+    private func observeMediaServicesReset() async {
+        for await notification in NotificationCenter.default.notifications(named: AVAudioSession.mediaServicesWereResetNotification) {
+            lastMediaServicesResetAt = Date()
+            print("媒体服务已重置: \(notification.name), userInfo=\(String(describing: notification.userInfo))")
+
+            if isInjectionEnabled {
+                do {
+                    try reapplyInjectionPreferenceIfNeeded()
+                } catch {
+                    lastError = error.localizedDescription
+                }
+            } else {
+                refreshAudioSessionDiagnostics(printToConsole: true)
+            }
+        }
+    }
+
     private func publishModeChangeResult(_ result: InjectionModeChangeResult) -> InjectionModeChangeResult {
         lastModeChangeResult = result
         lastModeChangeResultAt = Date()
         return result
-    }
-
-    @available(iOS 18.2, *)
-    private func configureAudioSessionForInjection() throws {
-        let session = AVAudioSession.sharedInstance()
-        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-        try session.setActive(true)
     }
 
     private func debugValue(_ value: Bool?) -> String {

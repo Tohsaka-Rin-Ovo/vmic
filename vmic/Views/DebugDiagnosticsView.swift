@@ -40,6 +40,7 @@ struct DebugDiagnosticsView: View {
     let initialFocus: DebugFocusTarget?
 
     @StateObject private var monitorExperiment = MonitorVolumeExperimentManager()
+    @StateObject private var speechProbe = OfficialSpeechProbeManager()
 
     @State private var runningAction: DiagnosticAction?
     @State private var didCopyDiagnostics = false
@@ -121,6 +122,11 @@ struct DebugDiagnosticsView: View {
                     )
                     .id(DebugFocusTarget.injectionSwitch)
 
+                    OfficialSpeechProbeCard(
+                        probeManager: speechProbe,
+                        prepareForProbe: prepareForOfficialSpeechProbe
+                    )
+
                     MonitorVolumeExperimentCard(
                         clip: experimentClip,
                         soundsDirectory: libraryStore.soundsDirectory,
@@ -169,12 +175,28 @@ struct DebugDiagnosticsView: View {
 
     private func prepareForMonitorExperiment() async {
         playbackManager.stopAll()
+        speechProbe.stop()
 
         if !injectionManager.isInjectionEnabled, injectionManager.permissionState.canEnableInjection {
             _ = await injectionManager.setInjectionEnabled(true)
         }
 
         injectionManager.refreshAudioSessionDiagnostics(printToConsole: true)
+    }
+
+    private func prepareForOfficialSpeechProbe() async {
+        playbackManager.stopAll()
+        monitorExperiment.stop()
+
+        if !injectionManager.isInjectionEnabled, injectionManager.permissionState.canEnableInjection {
+            _ = await injectionManager.setInjectionEnabled(true)
+        }
+
+        do {
+            try injectionManager.reapplyInjectionPreferenceIfNeeded()
+        } catch {
+            injectionManager.refreshAudioSessionDiagnostics(printToConsole: true)
+        }
     }
 
     private func copyDiagnostics() {
@@ -460,6 +482,107 @@ private struct DebugSwitchCard: View {
     }
 }
 
+private struct OfficialSpeechProbeCard: View {
+    @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    @ObservedObject var probeManager: OfficialSpeechProbeManager
+    let prepareForProbe: () async -> Void
+
+    private var channelTint: Color {
+        injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : Color(red: 0.88, green: 0.58, blue: 0.12)
+    }
+
+    private var switchTint: Color {
+        injectionManager.isInjectionEnabled ? VmicTheme.blue : VmicTheme.mutedInk
+    }
+
+    private var canStartProbe: Bool {
+        let canUseSwitch = injectionManager.isInjectionEnabled || injectionManager.permissionState.canEnableInjection
+
+        return injectionManager.isInjectionAvailableInCurrentCall
+            && canUseSwitch
+            && probeManager.status != .running
+            && !injectionManager.isChangingInjectionMode
+    }
+
+    var body: some View {
+        DebugCard(
+            title: settingsStore.text(.officialSpeechProbe),
+            subtitle: settingsStore.text(.officialSpeechProbeDetail),
+            systemImage: "text.bubble",
+            tint: VmicTheme.blue
+        ) {
+            DebugInfoRow(
+                title: settingsStore.text(.speechProbePhraseLabel),
+                value: settingsStore.text(.speechProbePhrase)
+            )
+
+            HStack(spacing: 0) {
+                DebugMetric(
+                    title: settingsStore.text(.injectionChannel),
+                    value: injectionManager.isInjectionAvailableInCurrentCall ? settingsStore.text(.available) : settingsStore.text(.unavailable),
+                    tint: channelTint
+                )
+
+                DebugMetricDivider()
+
+                DebugMetric(
+                    title: settingsStore.text(.injectionSwitch),
+                    value: injectionManager.isInjectionEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
+                    tint: switchTint
+                )
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    startProbe()
+                } label: {
+                    DiagnosticActionLabel(
+                        title: settingsStore.text(.playSpeechProbe),
+                        systemImage: "play.fill",
+                        isRunning: probeManager.status == .running
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle())
+                .disabled(!canStartProbe)
+
+                Button {
+                    probeManager.stop()
+                } label: {
+                    DiagnosticActionLabel(
+                        title: settingsStore.text(.stopSpeechProbe),
+                        systemImage: "stop.fill",
+                        isRunning: false
+                    )
+                }
+                .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.mutedInk))
+                .disabled(probeManager.status != .running)
+            }
+            .padding(.top, 4)
+
+            SpeechProbeStatusBanner(status: probeManager.status)
+
+            Text(settingsStore.text(.speechProbeInstruction))
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private func startProbe() {
+        Task {
+            await prepareForProbe()
+            await MainActor.run {
+                probeManager.speak(
+                    settingsStore.text(.speechProbePhrase),
+                    reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+                )
+            }
+        }
+    }
+}
+
 private struct MonitorVolumeExperimentCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
@@ -697,6 +820,139 @@ private struct ExperimentStatusBanner: View {
             return settingsStore.text(.experimentStopped)
         case .failed(let message):
             return settingsStore.text(.experimentFailed(message))
+        }
+    }
+}
+
+private struct SpeechProbeStatusBanner: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let status: OfficialSpeechProbeStatus
+
+    private var tint: Color {
+        switch status {
+        case .idle, .stopped:
+            return VmicTheme.mutedInk
+        case .running:
+            return VmicTheme.blue
+        case .finished:
+            return VmicTheme.mint
+        case .failed:
+            return Color(red: 0.82, green: 0.20, blue: 0.18)
+        }
+    }
+
+    private var systemImage: String {
+        switch status {
+        case .idle:
+            return "text.bubble"
+        case .running:
+            return "waveform"
+        case .finished:
+            return "checkmark.circle.fill"
+        case .stopped:
+            return "stop.circle"
+        case .failed:
+            return "xmark.circle.fill"
+        }
+    }
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.body.weight(.semibold))
+                .foregroundStyle(tint)
+                .frame(width: 22, height: 22)
+
+            Text(statusText)
+                .font(.footnote.weight(.medium))
+                .foregroundStyle(VmicTheme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(tint.opacity(0.12), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    private var statusText: String {
+        switch status {
+        case .idle:
+            return settingsStore.text(.speechProbeReady)
+        case .running:
+            return settingsStore.text(.speechProbeRunning)
+        case .finished:
+            return settingsStore.text(.speechProbeFinished)
+        case .stopped:
+            return settingsStore.text(.speechProbeStopped)
+        case .failed(let message):
+            return settingsStore.text(.speechProbeFailed(message))
+        }
+    }
+}
+
+private enum OfficialSpeechProbeStatus: Equatable {
+    case idle
+    case running
+    case finished
+    case stopped
+    case failed(String)
+}
+
+@MainActor
+private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSpeechSynthesizerDelegate {
+    @Published private(set) var status: OfficialSpeechProbeStatus = .idle
+
+    private let synthesizer = AVSpeechSynthesizer()
+
+    override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
+
+    func speak(
+        _ text: String,
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+    ) {
+        do {
+            try reapplyInjectionPreference?()
+
+            if synthesizer.isSpeaking {
+                synthesizer.stopSpeaking(at: .immediate)
+            }
+
+            let utterance = AVSpeechUtterance(string: text)
+            let enhancedVoice = AVSpeechSynthesisVoice.speechVoices().first(where: {
+                $0.language == AVSpeechSynthesisVoice.currentLanguageCode() && $0.quality == .enhanced
+            })
+            utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN") ?? enhancedVoice
+            utterance.volume = 1
+            utterance.rate = AVSpeechUtteranceDefaultSpeechRate
+
+            status = .running
+            synthesizer.speak(utterance)
+        } catch {
+            status = .failed(error.localizedDescription)
+        }
+    }
+
+    func stop() {
+        guard synthesizer.isSpeaking else {
+            status = .stopped
+            return
+        }
+
+        synthesizer.stopSpeaking(at: .immediate)
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.status = .finished
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didCancel utterance: AVSpeechUtterance) {
+        Task { @MainActor [weak self] in
+            self?.status = .stopped
         }
     }
 }
@@ -959,6 +1215,7 @@ private struct DebugSessionDetailsCard: View {
 
             DebugInfoRow(title: settingsStore.text(.currentCategory), value: injectionManager.audioSessionDiagnostics.category)
             DebugInfoRow(title: settingsStore.text(.currentMode), value: injectionManager.audioSessionDiagnostics.mode)
+            DebugInfoRow(title: settingsStore.text(.preferredInjectionMode), value: injectionManager.audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? settingsStore.text(.notSupported))
             DebugInfoRow(title: settingsStore.text(.currentInputPorts), value: listValue(injectionManager.audioSessionDiagnostics.inputPortTypes))
             DebugInfoRow(title: settingsStore.text(.currentOutputPorts), value: listValue(injectionManager.audioSessionDiagnostics.outputPortTypes))
             DebugInfoRow(title: settingsStore.text(.currentInputDevices), value: listValue(injectionManager.audioSessionDiagnostics.inputPortNames))
