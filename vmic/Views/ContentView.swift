@@ -27,28 +27,41 @@ struct ContentView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            rootContent
-                .background(VmicTheme.appBackground)
-                .overlay(alignment: .topLeading) {
-                    FloatingNowPlayingHostView(manager: floatingWindowManager)
-                        .frame(width: 96, height: 96)
-                        .opacity(0.01)
-                        .allowsHitTesting(false)
-                        .accessibilityHidden(true)
-                }
-                .toolbar {
-                    ToolbarItem(placement: .topBarLeading) {
-                        Button {
-                            isSettingsPresented = true
-                        } label: {
-                            Image(systemName: "gearshape")
-                        }
-                        .buttonStyle(QuietIconButtonStyle())
-                        .accessibilityLabel(settingsStore.text(.settings))
+        ZStack(alignment: .leading) {
+            NavigationStack {
+                rootContent
+                    .background(VmicTheme.appBackground)
+                    .overlay(alignment: .topLeading) {
+                        FloatingNowPlayingHostView(manager: floatingWindowManager)
+                            .frame(width: 96, height: 96)
+                            .opacity(0.01)
+                            .allowsHitTesting(false)
+                            .accessibilityHidden(true)
                     }
-                }
-                .vmicOpaqueNavigationBar()
+                    .toolbar {
+                        ToolbarItem(placement: .topBarLeading) {
+                            Button {
+                                withAnimation(.easeInOut(duration: 0.26)) {
+                                    isSettingsPresented = true
+                                }
+                            } label: {
+                                Image(systemName: "gearshape")
+                            }
+                            .buttonStyle(QuietIconButtonStyle())
+                            .accessibilityLabel(settingsStore.text(.settings))
+                        }
+                    }
+                    .vmicOpaqueNavigationBar()
+            }
+
+            if isSettingsPresented {
+                SettingsDrawer(close: closeSettings)
+                    .preferredColorScheme(settingsStore.themeMode.colorScheme)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(VmicTheme.drawerBackground.ignoresSafeArea())
+                    .transition(.move(edge: .leading))
+                    .zIndex(10)
+            }
         }
         .task {
             await MainActor.run {
@@ -86,10 +99,6 @@ struct ContentView: View {
             syncFloatingWindow(for: scenePhase)
         }
         .preferredColorScheme(settingsStore.themeMode.colorScheme)
-        .fullScreenCover(isPresented: $isSettingsPresented) {
-            SettingsDrawer(close: closeSettings)
-                .preferredColorScheme(settingsStore.themeMode.colorScheme)
-        }
     }
 
     @ViewBuilder
@@ -141,7 +150,9 @@ struct ContentView: View {
     }
 
     private func closeSettings() {
-        isSettingsPresented = false
+        withAnimation(.easeInOut(duration: 0.24)) {
+            isSettingsPresented = false
+        }
     }
 
     private func syncFloatingWindow(for phase: ScenePhase) {

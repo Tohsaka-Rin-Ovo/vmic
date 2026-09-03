@@ -87,7 +87,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         if shouldLog {
             lastLoggedOutputVolume = outputVolume
             DiagnosticLogStore.shared.log(
-                "设置桥接输入音量",
+                "设置文件音频音量",
                 source: .playback,
                 details: ["volume=\(formatPercent(Double(outputVolume)))", "activePlayers=\(playersByClipID.count)"]
             )
@@ -150,6 +150,12 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             if let existingPlayer = playersByClipID[clip.id] {
                 existingPlayer.stop()
                 clipIDsByPlayerID[ObjectIdentifier(existingPlayer)] = nil
+                playersByClipID[clip.id] = nil
+            }
+
+            let didStart = player.play()
+            guard didStart else {
+                throw AudioPlaybackError.playbackDidNotStart
             }
 
             playersByClipID[clip.id] = player
@@ -158,7 +164,6 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
 
-            let didStart = player.play()
             refreshPlaybackProgress()
             startProgressTimerIfNeeded()
             lastError = nil
@@ -175,11 +180,13 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
                 ]
             )
         } catch {
+            playersByClipID[clip.id] = nil
             activeClipIDs.remove(clip.id)
             pausedClipIDs.remove(clip.id)
             playbackProgressByClipID[clip.id] = nil
             elapsedTimeByClipID[clip.id] = nil
             durationByClipID[clip.id] = nil
+            updateCurrentClip(afterRemoving: clip.id)
             lastError = "无法播放 \(clip.title)：\(error.localizedDescription)"
             DiagnosticLogStore.shared.log(
                 "播放音频失败",
@@ -221,6 +228,10 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             player.volume = outputVolume
             let didStart = player.play()
+            guard didStart else {
+                throw AudioPlaybackError.playbackDidNotStart
+            }
+
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
             refreshPlaybackProgress()
@@ -398,7 +409,18 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             details: [
                 "categoryBefore=\(session.category.rawValue)",
                 "modeBefore=\(session.mode.rawValue)",
+                "optionsBefore=\(session.categoryOptions.rawValue)",
                 "sampleRateBefore=\(Int(session.sampleRate.rounded()))"
+            ]
+        )
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        DiagnosticLogStore.shared.log(
+            "播放音频会话 setCategory 完成",
+            source: .playback,
+            details: [
+                "category=\(session.category.rawValue)",
+                "mode=\(session.mode.rawValue)",
+                "options=\(session.categoryOptions.rawValue)"
             ]
         )
         try session.setActive(true)
@@ -412,7 +434,15 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             ]
         )
         try reapplyInjectionPreference?()
-        DiagnosticLogStore.shared.log("播放音频会话配置完成", source: .playback)
+        DiagnosticLogStore.shared.log(
+            "播放音频会话配置完成",
+            source: .playback,
+            details: [
+                "category=\(session.category.rawValue)",
+                "mode=\(session.mode.rawValue)",
+                "options=\(session.categoryOptions.rawValue)"
+            ]
+        )
     }
 
     private func playbackStateDescription(for clipID: UUID) -> String {
@@ -437,5 +467,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     private func formatSeconds(_ seconds: TimeInterval) -> String {
         guard seconds.isFinite else { return "unknown" }
         return String(format: "%.2fs", seconds)
+    }
+}
+
+private enum AudioPlaybackError: LocalizedError {
+    case playbackDidNotStart
+
+    var errorDescription: String? {
+        switch self {
+        case .playbackDidNotStart:
+            return "系统没有启动音频播放。"
+        }
     }
 }

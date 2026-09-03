@@ -958,6 +958,7 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
                 details: ["textLength=\(text.count)"] + Self.audioSessionDetails(session)
             )
             do {
+                try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
                 try session.setActive(true)
                 DiagnosticLogStore.shared.log(
                     "官方语音音频会话已激活",
@@ -1053,6 +1054,7 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
         var details = [
             "category=\(session.category.rawValue)",
             "mode=\(session.mode.rawValue)",
+            "options=\(session.categoryOptions.rawValue)",
             "sampleRate=\(Int(session.sampleRate.rounded()))",
             "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
             "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
@@ -1321,6 +1323,7 @@ private final class PlaybackSelfCheckManager: NSObject, ObservableObject {
             source: .playbackSelfCheck,
             details: Self.audioSessionDetails(session)
         )
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         try session.setActive(true)
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
@@ -1347,6 +1350,7 @@ private final class PlaybackSelfCheckManager: NSObject, ObservableObject {
         var details = [
             "category=\(session.category.rawValue)",
             "mode=\(session.mode.rawValue)",
+            "options=\(session.categoryOptions.rawValue)",
             "sampleRate=\(Int(session.sampleRate.rounded()))",
             "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
             "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"

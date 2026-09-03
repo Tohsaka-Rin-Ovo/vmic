@@ -330,6 +330,9 @@ final class MicrophoneInjectionManager: ObservableObject {
         pendingInjectionMode = enabled
 
         do {
+            if enabled {
+                prepareAppAudioSessionForInjection(reason: "enableInjection")
+            }
             try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
             lastInjectionModeChangeAt = Date()
@@ -371,6 +374,7 @@ final class MicrophoneInjectionManager: ObservableObject {
         if #available(iOS 18.2, *) {
             do {
                 DiagnosticLogStore.shared.log("重申注入偏好开始", source: .injection)
+                prepareAppAudioSessionForInjection(reason: "reapplyInjectionPreference")
                 try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(.spokenAudio)
                 lastInjectionModeChangeAt = Date()
                 lastError = nil
@@ -395,6 +399,45 @@ final class MicrophoneInjectionManager: ObservableObject {
                 )
                 throw error
             }
+        }
+    }
+
+    private func prepareAppAudioSessionForInjection(reason: String) {
+        let session = AVAudioSession.sharedInstance()
+        DiagnosticLogStore.shared.log(
+            "准备通话注入音频会话",
+            source: .injection,
+            details: [
+                "reason=\(reason)",
+                "categoryBefore=\(session.category.rawValue)",
+                "modeBefore=\(session.mode.rawValue)",
+                "optionsBefore=\(session.categoryOptions.rawValue)"
+            ]
+        )
+
+        do {
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+            try session.setActive(true)
+            refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
+            DiagnosticLogStore.shared.log(
+                "通话注入音频会话已准备",
+                source: .injection,
+                details: [
+                    "reason=\(reason)",
+                    "category=\(session.category.rawValue)",
+                    "mode=\(session.mode.rawValue)",
+                    "options=\(session.categoryOptions.rawValue)"
+                ]
+            )
+        } catch {
+            DiagnosticLogStore.shared.log(
+                "通话注入音频会话准备失败，继续尝试注入偏好",
+                source: .injection,
+                details: [
+                    "reason=\(reason)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 

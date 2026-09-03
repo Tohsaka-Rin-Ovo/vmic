@@ -589,7 +589,7 @@ final class AppSettingsStore: ObservableObject {
         case .inputVolume:
             return "输入音量"
         case .inputVolumeDetail:
-            return "控制本地音频加入通话时的音量。"
+            return "控制音频文件播放并尝试加入通话时的音量；设为 0 会让文件音频静音。"
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:
@@ -950,7 +950,7 @@ final class AppSettingsStore: ObservableObject {
         case .inputVolume:
             return "Input Volume"
         case .inputVolumeDetail:
-            return "Controls the local audio volume added to calls."
+            return "Controls audio file playback volume while vmic tries to add it to calls. Setting it to 0 mutes file audio."
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:
