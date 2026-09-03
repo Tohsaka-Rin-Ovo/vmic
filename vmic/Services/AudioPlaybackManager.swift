@@ -16,8 +16,12 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     @Published private(set) var durationByClipID: [UUID: TimeInterval] = [:]
     @Published var lastError: String?
 
+    var playbackDidFinish: ((UUID) -> Void)?
+
     private var playersByClipID: [UUID: AVAudioPlayer] = [:]
     private var clipIDsByPlayerID: [ObjectIdentifier: UUID] = [:]
+    private var playbackStartedAtByClipID: [UUID: Date] = [:]
+    private var playbackCompletionCountByClipID: [UUID: Int] = [:]
     private var outputVolume: Float = 1
     private var lastLoggedOutputVolume: Float?
     private var progressTimer: Timer?
@@ -45,6 +49,19 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         }
 
         return player.duration
+    }
+
+    func playbackStartedAt(for clipID: UUID) -> Date? {
+        playbackStartedAtByClipID[clipID]
+    }
+
+    func playbackElapsedSinceStart(for clipID: UUID) -> TimeInterval? {
+        guard let startedAt = playbackStartedAtByClipID[clipID] else { return nil }
+        return Date().timeIntervalSince(startedAt)
+    }
+
+    func playbackCompletionCount(for clipID: UUID) -> Int {
+        playbackCompletionCountByClipID[clipID] ?? 0
     }
 
     func seek(_ clip: SoundClip, toProgress progress: Double) {
@@ -124,7 +141,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     func play(
         _ clip: SoundClip,
         from directory: URL,
-        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
+        reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil,
+        resetPlaybackSession: Bool = true
     ) {
         let url = clip.fileURL(in: directory)
         DiagnosticLogStore.shared.log(
@@ -163,6 +181,13 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             activeClipIDs.insert(clip.id)
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
+            if resetPlaybackSession || playbackStartedAtByClipID[clip.id] == nil {
+                playbackStartedAtByClipID[clip.id] = Date()
+            }
+
+            if resetPlaybackSession || playbackCompletionCountByClipID[clip.id] == nil {
+                playbackCompletionCountByClipID[clip.id] = 0
+            }
 
             refreshPlaybackProgress()
             startProgressTimerIfNeeded()
@@ -186,6 +211,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             playbackProgressByClipID[clip.id] = nil
             elapsedTimeByClipID[clip.id] = nil
             durationByClipID[clip.id] = nil
+            playbackStartedAtByClipID[clip.id] = nil
+            playbackCompletionCountByClipID[clip.id] = nil
             updateCurrentClip(afterRemoving: clip.id)
             lastError = "无法播放 \(clip.title)：\(error.localizedDescription)"
             DiagnosticLogStore.shared.log(
@@ -282,6 +309,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         playbackProgressByClipID[clip.id] = nil
         elapsedTimeByClipID[clip.id] = nil
         durationByClipID[clip.id] = nil
+        playbackStartedAtByClipID[clip.id] = nil
+        playbackCompletionCountByClipID[clip.id] = nil
         updateCurrentClip(afterRemoving: clip.id)
         stopProgressTimerIfNeeded()
     }
@@ -301,6 +330,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         playbackProgressByClipID.removeAll()
         elapsedTimeByClipID.removeAll()
         durationByClipID.removeAll()
+        playbackStartedAtByClipID.removeAll()
+        playbackCompletionCountByClipID.removeAll()
         progressTimer?.invalidate()
         progressTimer = nil
     }
@@ -316,8 +347,10 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
                         "successfully=\(flag)"
                     ]
                 )
+                playbackCompletionCountByClipID[clipID, default: 0] += 1
+                playbackDidFinish?(clipID)
             }
-            clear(player)
+            clear(player, preserveSessionCounters: true)
         }
     }
 
@@ -333,18 +366,26 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         }
     }
 
-    private func clear(_ player: AVAudioPlayer) {
+    private func clear(_ player: AVAudioPlayer, preserveSessionCounters: Bool = false) {
         let playerID = ObjectIdentifier(player)
         guard let clipID = clipIDsByPlayerID[playerID] else { return }
+        let isCurrentPlayer = playersByClipID[clipID].map { ObjectIdentifier($0) == playerID } ?? false
 
-        playersByClipID[clipID] = nil
+        if isCurrentPlayer {
+            playersByClipID[clipID] = nil
+            activeClipIDs.remove(clipID)
+            pausedClipIDs.remove(clipID)
+            playbackProgressByClipID[clipID] = nil
+            elapsedTimeByClipID[clipID] = nil
+            durationByClipID[clipID] = nil
+            if !preserveSessionCounters {
+                playbackStartedAtByClipID[clipID] = nil
+                playbackCompletionCountByClipID[clipID] = nil
+            }
+            updateCurrentClip(afterRemoving: clipID)
+        }
+
         clipIDsByPlayerID[playerID] = nil
-        activeClipIDs.remove(clipID)
-        pausedClipIDs.remove(clipID)
-        playbackProgressByClipID[clipID] = nil
-        elapsedTimeByClipID[clipID] = nil
-        durationByClipID[clipID] = nil
-        updateCurrentClip(afterRemoving: clipID)
         stopProgressTimerIfNeeded()
     }
 

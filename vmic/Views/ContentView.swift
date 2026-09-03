@@ -88,6 +88,12 @@ struct ContentView: View {
                     stopAction: {
                         playbackManager.stop(currentClip)
                     },
+                    previousAction: {
+                        skipPlayback(from: currentClip, direction: .previous)
+                    },
+                    nextAction: {
+                        skipPlayback(from: currentClip, direction: .next)
+                    },
                     seekAction: { progress in
                         playbackManager.seek(currentClip, toProgress: progress)
                     }
@@ -98,10 +104,20 @@ struct ContentView: View {
                 .zIndex(20)
             }
         }
+        .fullScreenCover(isPresented: Binding(
+            get: { appChromeStore.isPlaybackSettingsPresented },
+            set: { appChromeStore.isPlaybackSettingsPresented = $0 }
+        )) {
+            PlaybackSessionSettingsView(close: {
+                appChromeStore.isPlaybackSettingsPresented = false
+            })
+            .preferredColorScheme(settingsStore.themeMode.colorScheme)
+        }
         .task {
             await MainActor.run {
                 DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
             }
+            configurePlaybackFinishHandler()
             await injectionManager.refresh()
         }
         .onChange(of: scenePhase) { _, newPhase in
@@ -200,6 +216,128 @@ struct ContentView: View {
         )
     }
 
+    private func togglePlayback(_ clip: SoundClip) {
+        if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
+            playbackManager.stopAll()
+        }
+
+        playbackManager.toggle(
+            clip,
+            from: libraryStore.soundsDirectory,
+            volume: settingsStore.inputVolume,
+            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+        )
+    }
+
+    private func skipPlayback(from clip: SoundClip, direction: PlaybackSkipDirection) {
+        guard let targetClip = adjacentClip(to: clip, direction: direction) else { return }
+
+        if settingsStore.singlePlayback {
+            playbackManager.stopAll()
+        } else {
+            playbackManager.stop(clip)
+        }
+
+        playbackManager.setOutputVolume(settingsStore.inputVolume)
+        playbackManager.play(
+            targetClip,
+            from: libraryStore.soundsDirectory,
+            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+        )
+    }
+
+    private func adjacentClip(to clip: SoundClip, direction: PlaybackSkipDirection) -> SoundClip? {
+        let clips = libraryStore.clips
+        guard clips.count > 1, let index = clips.firstIndex(where: { $0.id == clip.id }) else {
+            return nil
+        }
+
+        switch direction {
+        case .previous:
+            return clips[index == clips.startIndex ? clips.index(before: clips.endIndex) : clips.index(before: index)]
+        case .next:
+            let nextIndex = clips.index(after: index)
+            return clips[nextIndex == clips.endIndex ? clips.startIndex : nextIndex]
+        }
+    }
+
+    private func configurePlaybackFinishHandler() {
+        playbackManager.playbackDidFinish = { [weak playbackManager, weak libraryStore, weak settingsStore, weak injectionManager] clipID in
+            guard
+                let playbackManager,
+                let libraryStore,
+                let settingsStore,
+                let injectionManager,
+                let finishedClip = libraryStore.clips.first(where: { $0.id == clipID })
+            else {
+                return
+            }
+
+            let completionCount = playbackManager.playbackCompletionCount(for: clipID)
+            if settingsStore.playbackLimitMode == .playCount,
+               completionCount >= max(settingsStore.playbackLimitCount, 1) {
+                DiagnosticLogStore.shared.log(
+                    "播放限制达到次数上限",
+                    source: .playback,
+                    details: [
+                        "clipID=\(String(clipID.uuidString.prefix(8)))",
+                        "count=\(completionCount)",
+                        "limit=\(settingsStore.playbackLimitCount)"
+                    ]
+                )
+                return
+            }
+
+            if settingsStore.playbackLimitMode == .minutes,
+               let startedAt = playbackManager.playbackStartedAt(for: clipID) {
+                let elapsedMinutes = Date().timeIntervalSince(startedAt) / 60
+                if elapsedMinutes >= Double(max(settingsStore.playbackLimitMinutes, 1)) {
+                    DiagnosticLogStore.shared.log(
+                        "播放限制达到时长上限",
+                        source: .playback,
+                        details: [
+                            "clipID=\(String(clipID.uuidString.prefix(8)))",
+                            "elapsedMinutes=\(String(format: "%.2f", elapsedMinutes))",
+                            "limit=\(settingsStore.playbackLimitMinutes)"
+                        ]
+                    )
+                    return
+                }
+            }
+
+            let nextClip: SoundClip?
+            switch settingsStore.playbackMode {
+            case .repeatOne:
+                nextClip = finishedClip
+            case .ordered:
+                nextClip = nextOrderedClip(after: finishedClip, in: libraryStore.clips)
+            case .shuffle:
+                nextClip = nextShuffledClip(excluding: finishedClip, in: libraryStore.clips)
+            }
+
+            guard let nextClip else { return }
+
+            playbackManager.play(
+                nextClip,
+                from: libraryStore.soundsDirectory,
+                reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded,
+                resetPlaybackSession: false
+            )
+        }
+    }
+
+    private func nextOrderedClip(after clip: SoundClip, in clips: [SoundClip]) -> SoundClip? {
+        guard let index = clips.firstIndex(where: { $0.id == clip.id }) else { return nil }
+        let nextIndex = clips.index(after: index)
+        guard nextIndex < clips.endIndex else { return nil }
+        return clips[nextIndex]
+    }
+
+    private func nextShuffledClip(excluding clip: SoundClip, in clips: [SoundClip]) -> SoundClip? {
+        let candidates = clips.filter { $0.id != clip.id }
+        return candidates.randomElement()
+    }
+
     private func scenePhaseDescription(_ phase: ScenePhase) -> String {
         switch phase {
         case .active:
@@ -212,4 +350,9 @@ struct ContentView: View {
             return "unknown"
         }
     }
+}
+
+private enum PlaybackSkipDirection {
+    case previous
+    case next
 }

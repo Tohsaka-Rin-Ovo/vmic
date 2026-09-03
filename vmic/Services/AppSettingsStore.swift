@@ -39,6 +39,26 @@ enum AppThemeMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum PlaybackMode: String, CaseIterable, Identifiable {
+    case ordered
+    case repeatOne
+    case shuffle
+
+    var id: String {
+        rawValue
+    }
+}
+
+enum PlaybackLimitMode: String, CaseIterable, Identifiable {
+    case unlimited
+    case playCount
+    case minutes
+
+    var id: String {
+        rawValue
+    }
+}
+
 enum VmicText {
     case settings
     case theme
@@ -189,6 +209,28 @@ enum VmicText {
     case removeFromLibrary
     case sortingEnabled
     case playback
+    case playbackSettings
+    case playbackSettingsDetail
+    case currentPlaybackList
+    case noCurrentPlaybackList
+    case playbackMode
+    case playbackModeOrdered
+    case playbackModeRepeatOne
+    case playbackModeShuffle
+    case playbackLimit
+    case playbackLimitUnlimited
+    case playbackLimitPlayCount
+    case playbackLimitMinutes
+    case playbackLimitCountValue(Int)
+    case playbackLimitMinutesValue(Int)
+    case play
+    case pause
+    case previousTrack
+    case nextTrack
+    case stopPlayback
+    case compactPlayer
+    case expandPlayer
+    case currentPlayback
     case inputVolume
     case inputVolumeDetail
     case volumePercent(Int)
@@ -242,6 +284,30 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var playbackMode: PlaybackMode {
+        didSet {
+            UserDefaults.standard.set(playbackMode.rawValue, forKey: Self.playbackModeKey)
+        }
+    }
+
+    @Published var playbackLimitMode: PlaybackLimitMode {
+        didSet {
+            UserDefaults.standard.set(playbackLimitMode.rawValue, forKey: Self.playbackLimitModeKey)
+        }
+    }
+
+    @Published var playbackLimitCount: Int {
+        didSet {
+            UserDefaults.standard.set(max(1, playbackLimitCount), forKey: Self.playbackLimitCountKey)
+        }
+    }
+
+    @Published var playbackLimitMinutes: Int {
+        didSet {
+            UserDefaults.standard.set(max(1, playbackLimitMinutes), forKey: Self.playbackLimitMinutesKey)
+        }
+    }
+
     @Published var inputVolume: Double {
         didSet {
             UserDefaults.standard.set(inputVolume, forKey: Self.inputVolumeKey)
@@ -269,6 +335,10 @@ final class AppSettingsStore: ObservableObject {
     private static let languageKey = "vmic.language"
     private static let themeKey = "vmic.theme"
     private static let singlePlaybackKey = "vmic.singlePlayback"
+    private static let playbackModeKey = "vmic.playbackMode"
+    private static let playbackLimitModeKey = "vmic.playbackLimitMode"
+    private static let playbackLimitCountKey = "vmic.playbackLimitCount"
+    private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
     private static let showDurationKey = "vmic.showDuration"
     private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
@@ -280,6 +350,12 @@ final class AppSettingsStore: ObservableObject {
         let rawTheme = UserDefaults.standard.string(forKey: Self.themeKey)
         themeMode = rawTheme.flatMap(AppThemeMode.init(rawValue:)) ?? .system
         singlePlayback = UserDefaults.standard.bool(forKey: Self.singlePlaybackKey)
+        let rawPlaybackMode = UserDefaults.standard.string(forKey: Self.playbackModeKey)
+        playbackMode = rawPlaybackMode.flatMap(PlaybackMode.init(rawValue:)) ?? .ordered
+        let rawPlaybackLimitMode = UserDefaults.standard.string(forKey: Self.playbackLimitModeKey)
+        playbackLimitMode = rawPlaybackLimitMode.flatMap(PlaybackLimitMode.init(rawValue:)) ?? .unlimited
+        playbackLimitCount = max(UserDefaults.standard.integer(forKey: Self.playbackLimitCountKey), 1)
+        playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
@@ -596,6 +672,50 @@ final class AppSettingsStore: ObservableObject {
             return "排序模式已开启"
         case .playback:
             return "播放"
+        case .playbackSettings:
+            return "播放设置"
+        case .playbackSettingsDetail:
+            return "查看当前播放列表，切换播放模式，并设置自动播放限制。"
+        case .currentPlaybackList:
+            return "当前播放列表"
+        case .noCurrentPlaybackList:
+            return "当前音频列表为空。"
+        case .playbackMode:
+            return "播放模式"
+        case .playbackModeOrdered:
+            return "顺序播放"
+        case .playbackModeRepeatOne:
+            return "单曲循环"
+        case .playbackModeShuffle:
+            return "随机播放"
+        case .playbackLimit:
+            return "播放限制"
+        case .playbackLimitUnlimited:
+            return "不限时"
+        case .playbackLimitPlayCount:
+            return "按次数"
+        case .playbackLimitMinutes:
+            return "按分钟"
+        case .playbackLimitCountValue(let value):
+            return "\(value) 次"
+        case .playbackLimitMinutesValue(let value):
+            return "\(value) 分钟"
+        case .play:
+            return "播放"
+        case .pause:
+            return "暂停"
+        case .previousTrack:
+            return "上一首"
+        case .nextTrack:
+            return "下一首"
+        case .stopPlayback:
+            return "停止播放"
+        case .compactPlayer:
+            return "迷你播放"
+        case .expandPlayer:
+            return "展开播放"
+        case .currentPlayback:
+            return "播放中"
         case .inputVolume:
             return "输入音量"
         case .inputVolumeDetail:
@@ -961,6 +1081,50 @@ final class AppSettingsStore: ObservableObject {
             return "Sorting enabled"
         case .playback:
             return "Playback"
+        case .playbackSettings:
+            return "Playback Settings"
+        case .playbackSettingsDetail:
+            return "View the current queue, switch playback mode, and set automatic playback limits."
+        case .currentPlaybackList:
+            return "Current Queue"
+        case .noCurrentPlaybackList:
+            return "The audio list is empty."
+        case .playbackMode:
+            return "Playback Mode"
+        case .playbackModeOrdered:
+            return "Ordered"
+        case .playbackModeRepeatOne:
+            return "Repeat One"
+        case .playbackModeShuffle:
+            return "Shuffle"
+        case .playbackLimit:
+            return "Playback Limit"
+        case .playbackLimitUnlimited:
+            return "Unlimited"
+        case .playbackLimitPlayCount:
+            return "By Count"
+        case .playbackLimitMinutes:
+            return "By Minutes"
+        case .playbackLimitCountValue(let value):
+            return "\(value) times"
+        case .playbackLimitMinutesValue(let value):
+            return "\(value) minutes"
+        case .play:
+            return "Play"
+        case .pause:
+            return "Pause"
+        case .previousTrack:
+            return "Previous Track"
+        case .nextTrack:
+            return "Next Track"
+        case .stopPlayback:
+            return "Stop Playback"
+        case .compactPlayer:
+            return "Mini Player"
+        case .expandPlayer:
+            return "Expand Player"
+        case .currentPlayback:
+            return "Playing"
         case .inputVolume:
             return "Input Volume"
         case .inputVolumeDetail:

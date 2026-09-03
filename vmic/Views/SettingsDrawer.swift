@@ -447,12 +447,12 @@ private struct SettingsToggleRow: View {
     }
 }
 
-private struct CompactCloseButtonStyle: ButtonStyle {
+struct CompactCloseButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .font(.caption.weight(.semibold))
+            .font(.caption2.weight(.semibold))
             .foregroundStyle(VmicTheme.blue)
-            .frame(width: 30, height: 30)
+            .frame(width: 26, height: 26)
             .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: Circle())
             .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
