@@ -401,15 +401,6 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
                 "sampleRateBefore=\(Int(session.sampleRate.rounded()))"
             ]
         )
-        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-        DiagnosticLogStore.shared.log(
-            "播放音频会话 setCategory 完成",
-            source: .playback,
-            details: [
-                "category=\(session.category.rawValue)",
-                "mode=\(session.mode.rawValue)"
-            ]
-        )
         try session.setActive(true)
         DiagnosticLogStore.shared.log(
             "播放音频会话 setActive 完成",

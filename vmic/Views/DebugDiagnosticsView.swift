@@ -1331,7 +1331,6 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
                 "modeBefore=\(session.mode.rawValue)"
             ]
         )
-        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         try session.setActive(true)
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
