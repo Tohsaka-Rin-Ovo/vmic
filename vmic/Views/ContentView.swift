@@ -3,14 +3,40 @@ import SwiftUI
 struct ContentView: View {
     @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
+    @EnvironmentObject private var libraryStore: SoundLibraryStore
+    @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    @StateObject private var floatingWindowManager = FloatingNowPlayingWindowManager()
     @State private var isSettingsPresented = false
+
+    private var currentClip: SoundClip? {
+        if let currentClipID = playbackManager.currentClipID,
+           let clip = libraryStore.clips.first(where: { $0.id == currentClipID }) {
+            return clip
+        }
+
+        return libraryStore.clips.first {
+            playbackManager.activeClipIDs.contains($0.id)
+        }
+    }
+
+    private var currentPlaybackState: SoundPlaybackState? {
+        guard let currentClip else { return nil }
+        return playbackManager.playbackState(for: currentClip.id)
+    }
 
     var body: some View {
         NavigationStack {
             rootContent
                 .background(VmicTheme.appBackground)
+                .overlay(alignment: .topLeading) {
+                    FloatingNowPlayingHostView(manager: floatingWindowManager)
+                        .frame(width: 96, height: 96)
+                        .opacity(0.01)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
                 .toolbar {
                     ToolbarItem(placement: .topBarLeading) {
                         Button {
@@ -42,6 +68,22 @@ struct ContentView: View {
                 DiagnosticLogStore.shared.log("App 回到前台，刷新注入状态", source: .app)
                 await injectionManager.refresh()
             }
+            syncFloatingWindow(for: newPhase)
+        }
+        .onChange(of: settingsStore.floatingWindowEnabled) { _, _ in
+            syncFloatingWindow(for: scenePhase)
+        }
+        .onChange(of: playbackManager.currentClipID) { _, _ in
+            syncFloatingWindow(for: scenePhase)
+        }
+        .onChange(of: playbackManager.activeClipIDs) { _, _ in
+            syncFloatingWindow(for: scenePhase)
+        }
+        .onChange(of: playbackManager.pausedClipIDs) { _, _ in
+            syncFloatingWindow(for: scenePhase)
+        }
+        .onChange(of: libraryStore.clips) { _, _ in
+            syncFloatingWindow(for: scenePhase)
         }
         .preferredColorScheme(settingsStore.themeMode.colorScheme)
         .fullScreenCover(isPresented: $isSettingsPresented) {
@@ -100,6 +142,16 @@ struct ContentView: View {
 
     private func closeSettings() {
         isSettingsPresented = false
+    }
+
+    private func syncFloatingWindow(for phase: ScenePhase) {
+        floatingWindowManager.sync(
+            isForeground: phase == .active,
+            isEnabled: settingsStore.floatingWindowEnabled,
+            clip: currentClip,
+            artworkDirectory: libraryStore.artworkDirectory,
+            playbackState: currentPlaybackState
+        )
     }
 
     private func scenePhaseDescription(_ phase: ScenePhase) -> String {

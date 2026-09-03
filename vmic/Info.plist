@@ -20,6 +20,10 @@
 	<string>vmic 会在你开启通话音频注入后，将选定的 App 音频添加到支持的通话。</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>vmic 需要通话音频相关权限，以便将 App 音频添加到支持的通话。</string>
+	<key>UIBackgroundModes</key>
+	<array>
+		<string>audio</string>
+	</array>
 	<key>UIApplicationSupportsIndirectInputEvents</key>
 	<true/>
 	<key>UILaunchScreen</key>

@@ -198,6 +198,11 @@ enum VmicText {
     case list
     case showDuration
     case showDurationDetail
+    case floatingWindow
+    case floatingWindowDetail
+    case backgroundFloatingWindow
+    case backgroundFloatingWindowDetail
+    case floatingWindowSystemNote
     case delete
     case playSound(String)
     case permissionChecking
@@ -248,11 +253,18 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var floatingWindowEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(floatingWindowEnabled, forKey: Self.floatingWindowEnabledKey)
+        }
+    }
+
     private static let languageKey = "vmic.language"
     private static let themeKey = "vmic.theme"
     private static let singlePlaybackKey = "vmic.singlePlayback"
     private static let inputVolumeKey = "vmic.inputVolume"
     private static let showDurationKey = "vmic.showDuration"
+    private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
 
     init() {
         let rawValue = UserDefaults.standard.string(forKey: Self.languageKey)
@@ -263,6 +275,7 @@ final class AppSettingsStore: ObservableObject {
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
+        floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
     }
 
     func text(_ key: VmicText) -> String {
@@ -592,6 +605,16 @@ final class AppSettingsStore: ObservableObject {
             return "显示时长"
         case .showDurationDetail:
             return "在音频列表右侧显示时长。"
+        case .floatingWindow:
+            return "悬浮窗"
+        case .floatingWindowDetail:
+            return "播放中退后台时尝试显示系统小窗。"
+        case .backgroundFloatingWindow:
+            return "后台播放小窗"
+        case .backgroundFloatingWindowDetail:
+            return "开启后，vmic 会在音频播放中切到后台时尝试拉起系统 PiP 小窗，回到前台后自动收起。"
+        case .floatingWindowSystemNote:
+            return "iOS 不允许 App 创建任意悬浮窗。这里使用的是系统 Picture in Picture，能否自动弹出取决于设备、系统状态和当前播放上下文。"
         case .delete:
             return "删除"
         case .playSound(let title):
@@ -945,6 +968,16 @@ final class AppSettingsStore: ObservableObject {
             return "Show Duration"
         case .showDurationDetail:
             return "Show durations on the right side of the audio list."
+        case .floatingWindow:
+            return "Floating Window"
+        case .floatingWindowDetail:
+            return "Try showing a system mini window when playback continues in the background."
+        case .backgroundFloatingWindow:
+            return "Background Mini Window"
+        case .backgroundFloatingWindowDetail:
+            return "When enabled, vmic tries to open a system PiP window while audio is playing in the background, then closes it after returning to the foreground."
+        case .floatingWindowSystemNote:
+            return "iOS does not allow apps to create arbitrary floating windows. vmic uses system Picture in Picture here, so automatic startup depends on the device, system state, and current playback context."
         case .delete:
             return "Delete"
         case .playSound(let title):

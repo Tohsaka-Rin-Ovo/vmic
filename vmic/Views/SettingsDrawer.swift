@@ -50,6 +50,16 @@ struct SettingsDrawer: View {
                     }
 
                     SettingsNavigationRow {
+                        FloatingWindowSettingsView()
+                    } label: {
+                        SettingsLinkRow(
+                            title: settingsStore.text(.floatingWindow),
+                            detail: settingsStore.floatingWindowEnabled ? settingsStore.text(.enabled) : settingsStore.text(.disabled),
+                            systemImage: "pip"
+                        )
+                    }
+
+                    SettingsNavigationRow {
                         AboutSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -263,6 +273,38 @@ private struct ListSettingsView: View {
         .scrollContentBackground(.hidden)
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.list))
+        .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
+    }
+}
+
+private struct FloatingWindowSettingsView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        List {
+            Section {
+                SettingsToggleRow(
+                    title: settingsStore.text(.backgroundFloatingWindow),
+                    detail: settingsStore.text(.backgroundFloatingWindowDetail),
+                    isOn: $settingsStore.floatingWindowEnabled
+                )
+            }
+            .listRowBackground(Color.clear)
+
+            Section {
+                Text(settingsStore.text(.floatingWindowSystemNote))
+                    .font(.footnote)
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
+            }
+            .listRowBackground(Color.clear)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(VmicTheme.drawerBackground)
+        .navigationTitle(settingsStore.text(.floatingWindow))
         .navigationBarTitleDisplayMode(.inline)
         .vmicOpaqueNavigationBar()
     }

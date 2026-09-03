@@ -24,6 +24,7 @@
 		5D4B60372D70000100A00001 /* SettingsDrawer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60362D70000100A00001 /* SettingsDrawer.swift */; };
 		5D4B60392D70000100A00001 /* DebugDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60382D70000100A00001 /* DebugDiagnosticsView.swift */; };
 		5D4B603B2D72000100A00001 /* DiagnosticLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */; };
+		5D4B603D2D73000100A00001 /* FloatingNowPlayingWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -46,6 +47,7 @@
 		5D4B60362D70000100A00001 /* SettingsDrawer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsDrawer.swift; sourceTree = "<group>"; };
 		5D4B60382D70000100A00001 /* DebugDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDiagnosticsView.swift; sourceTree = "<group>"; };
 		5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
+		5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingNowPlayingWindowManager.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +106,7 @@
 				5D4B60172D70000100A00001 /* SoundLibraryStore.swift */,
 				5D4B60342D70000100A00001 /* AppSettingsStore.swift */,
 				5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */,
+				5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -209,6 +212,7 @@
 				5D4B60372D70000100A00001 /* SettingsDrawer.swift in Sources */,
 				5D4B60392D70000100A00001 /* DebugDiagnosticsView.swift in Sources */,
 				5D4B603B2D72000100A00001 /* DiagnosticLogStore.swift in Sources */,
+				5D4B603D2D73000100A00001 /* FloatingNowPlayingWindowManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
