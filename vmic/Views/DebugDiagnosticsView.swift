@@ -970,10 +970,10 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
             }
 
             let utterance = AVSpeechUtterance(string: text)
-            let enhancedVoice = AVSpeechSynthesisVoice.speechVoices().first(where: {
+            let enhancedVoice = AVSpeechSynthesisVoice.speechVoices().first {
                 $0.language == AVSpeechSynthesisVoice.currentLanguageCode() && $0.quality == .enhanced
-            })
-            utterance.voice = AVSpeechSynthesisVoice(language: "zh-CN") ?? enhancedVoice
+            }
+            utterance.voice = enhancedVoice
             utterance.volume = 1
             utterance.rate = AVSpeechUtteranceDefaultSpeechRate
 
@@ -1012,6 +1012,19 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
         Task { @MainActor [weak self] in
             self?.status = .finished
             DiagnosticLogStore.shared.log("官方语音对照播放完成", source: .speechProbe)
+        }
+    }
+
+    nonisolated func speechSynthesizer(_ synthesizer: AVSpeechSynthesizer, didStart utterance: AVSpeechUtterance) {
+        Task { @MainActor in
+            DiagnosticLogStore.shared.log(
+                "官方语音对照开始朗读",
+                source: .speechProbe,
+                details: [
+                    "voice=\(utterance.voice?.identifier ?? "default")",
+                    "language=\(utterance.voice?.language ?? "unknown")"
+                ]
+            )
         }
     }
 
