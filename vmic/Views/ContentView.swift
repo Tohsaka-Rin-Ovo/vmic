@@ -6,6 +6,7 @@ struct ContentView: View {
     @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var appChromeStore: AppChromeStore
 
     @StateObject private var floatingWindowManager = FloatingNowPlayingWindowManager()
     @State private var isSettingsPresented = false
@@ -24,6 +25,15 @@ struct ContentView: View {
     private var currentPlaybackState: SoundPlaybackState? {
         guard let currentClip else { return nil }
         return playbackManager.playbackState(for: currentClip.id)
+    }
+
+    private var shouldShowFloatingDock: Bool {
+        guard currentClip != nil else { return false }
+        if appChromeStore.isDebugPageVisible {
+            return settingsStore.showFloatingDockInDebug
+        }
+
+        return true
     }
 
     var body: some View {
@@ -61,6 +71,31 @@ struct ContentView: View {
                     .background(VmicTheme.drawerBackground.ignoresSafeArea())
                     .transition(.move(edge: .leading))
                     .zIndex(10)
+            }
+        }
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            if shouldShowFloatingDock, let currentClip {
+                BottomNowPlayingBar(
+                    clip: currentClip,
+                    artworkDirectory: libraryStore.artworkDirectory,
+                    playbackState: playbackManager.playbackState(for: currentClip.id),
+                    progress: playbackManager.playbackProgress(for: currentClip.id),
+                    elapsedTime: playbackManager.elapsedTime(for: currentClip.id),
+                    duration: playbackManager.duration(for: currentClip.id) ?? currentClip.durationSeconds,
+                    togglePlayback: {
+                        togglePlayback(currentClip)
+                    },
+                    stopAction: {
+                        playbackManager.stop(currentClip)
+                    },
+                    seekAction: { progress in
+                        playbackManager.seek(currentClip, toProgress: progress)
+                    }
+                )
+                .padding(.horizontal, 16)
+                .padding(.bottom, 10)
+                .padding(.top, 4)
+                .zIndex(20)
             }
         }
         .task {

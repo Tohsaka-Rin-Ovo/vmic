@@ -60,32 +60,6 @@ struct SoundboardView: View {
             }
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
-            .padding(.bottom, currentClip == nil ? 0 : 84)
-
-            if let currentClip {
-                VStack {
-                    Spacer()
-                    BottomNowPlayingBar(
-                        clip: currentClip,
-                        artworkDirectory: libraryStore.artworkDirectory,
-                        playbackState: playbackManager.playbackState(for: currentClip.id),
-                        progress: playbackManager.playbackProgress(for: currentClip.id),
-                        elapsedTime: playbackManager.elapsedTime(for: currentClip.id),
-                        duration: playbackManager.duration(for: currentClip.id) ?? currentClip.durationSeconds,
-                        togglePlayback: {
-                            togglePlayback(currentClip)
-                        },
-                        stopAction: {
-                            playbackManager.stop(currentClip)
-                        },
-                        seekAction: { progress in
-                            playbackManager.seek(currentClip, toProgress: progress)
-                        }
-                    )
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 10)
-                }
-            }
         }
         .task {
             playbackManager.setOutputVolume(settingsStore.inputVolume)
@@ -673,7 +647,7 @@ private struct EmptySoundboardView: View {
     }
 }
 
-private struct BottomNowPlayingBar: View {
+struct BottomNowPlayingBar: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let clip: SoundClip

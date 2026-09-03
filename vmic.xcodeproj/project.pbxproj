@@ -25,6 +25,7 @@
 		5D4B60392D70000100A00001 /* DebugDiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B60382D70000100A00001 /* DebugDiagnosticsView.swift */; };
 		5D4B603B2D72000100A00001 /* DiagnosticLogStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */; };
 		5D4B603D2D73000100A00001 /* FloatingNowPlayingWindowManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */; };
+		5D4B603E2D73000100A00001 /* AppChromeStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D4B603F2D73000100A00001 /* AppChromeStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -48,6 +49,7 @@
 		5D4B60382D70000100A00001 /* DebugDiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugDiagnosticsView.swift; sourceTree = "<group>"; };
 		5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticLogStore.swift; sourceTree = "<group>"; };
 		5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FloatingNowPlayingWindowManager.swift; sourceTree = "<group>"; };
+		5D4B603F2D73000100A00001 /* AppChromeStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppChromeStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -104,6 +106,7 @@
 				5D4B60132D70000100A00001 /* AudioPlaybackManager.swift */,
 				5D4B60152D70000100A00001 /* MicrophoneInjectionManager.swift */,
 				5D4B60172D70000100A00001 /* SoundLibraryStore.swift */,
+				5D4B603F2D73000100A00001 /* AppChromeStore.swift */,
 				5D4B60342D70000100A00001 /* AppSettingsStore.swift */,
 				5D4B603A2D72000100A00001 /* DiagnosticLogStore.swift */,
 				5D4B603C2D73000100A00001 /* FloatingNowPlayingWindowManager.swift */,
@@ -209,6 +212,7 @@
 				5D4B60312D70000100A00001 /* VmicTheme.swift in Sources */,
 				5D4B60332D70000100A00001 /* CheckingView.swift in Sources */,
 				5D4B60352D70000100A00001 /* AppSettingsStore.swift in Sources */,
+				5D4B603E2D73000100A00001 /* AppChromeStore.swift in Sources */,
 				5D4B60372D70000100A00001 /* SettingsDrawer.swift in Sources */,
 				5D4B60392D70000100A00001 /* DebugDiagnosticsView.swift in Sources */,
 				5D4B603B2D72000100A00001 /* DiagnosticLogStore.swift in Sources */,

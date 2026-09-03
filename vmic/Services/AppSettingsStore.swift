@@ -202,6 +202,8 @@ enum VmicText {
     case backgroundFloatingWindow
     case backgroundFloatingWindowDetail
     case floatingWindowSystemNote
+    case showFloatingDockInDebug
+    case showFloatingDockInDebugDetail
     case delete
     case playSound(String)
     case permissionChecking
@@ -258,12 +260,19 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var showFloatingDockInDebug: Bool {
+        didSet {
+            UserDefaults.standard.set(showFloatingDockInDebug, forKey: Self.showFloatingDockInDebugKey)
+        }
+    }
+
     private static let languageKey = "vmic.language"
     private static let themeKey = "vmic.theme"
     private static let singlePlaybackKey = "vmic.singlePlayback"
     private static let inputVolumeKey = "vmic.inputVolume"
     private static let showDurationKey = "vmic.showDuration"
     private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
+    private static let showFloatingDockInDebugKey = "vmic.showFloatingDockInDebug"
 
     init() {
         let rawValue = UserDefaults.standard.string(forKey: Self.languageKey)
@@ -275,6 +284,7 @@ final class AppSettingsStore: ObservableObject {
         inputVolume = min(max(savedVolume, 0), 1)
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
+        showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
     }
 
     func text(_ key: VmicText) -> String {
@@ -612,6 +622,10 @@ final class AppSettingsStore: ObservableObject {
             return "开启后，vmic 会在音频播放中切到后台时尝试拉起系统 PiP 小窗，回到前台后自动收起。"
         case .floatingWindowSystemNote:
             return "iOS 不允许 App 创建任意悬浮窗。这里使用的是系统 Picture in Picture，能否自动弹出取决于设备、系统状态和当前播放上下文。"
+        case .showFloatingDockInDebug:
+            return "调试页显示悬浮窗"
+        case .showFloatingDockInDebugDetail:
+            return "默认在调试页隐藏底部播放悬浮窗，打开后也会继续显示。"
         case .delete:
             return "删除"
         case .playSound(let title):
@@ -973,6 +987,10 @@ final class AppSettingsStore: ObservableObject {
             return "When enabled, vmic tries to open a system PiP window while audio is playing in the background, then closes it after returning to the foreground."
         case .floatingWindowSystemNote:
             return "iOS does not allow apps to create arbitrary floating windows. vmic uses system Picture in Picture here, so automatic startup depends on the device, system state, and current playback context."
+        case .showFloatingDockInDebug:
+            return "Show Dock in Debug"
+        case .showFloatingDockInDebugDetail:
+            return "The bottom playback dock is hidden on the debug page by default. Turn this on to keep it visible there."
         case .delete:
             return "Delete"
         case .playSound(let title):

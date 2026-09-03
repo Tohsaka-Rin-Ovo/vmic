@@ -92,7 +92,7 @@ struct SettingsDrawer: View {
                     Button(action: close) {
                         Image(systemName: "xmark")
                     }
-                    .buttonStyle(QuietIconButtonStyle())
+                    .buttonStyle(CompactCloseButtonStyle())
                 }
             }
             .vmicOpaqueNavigationBar()
@@ -289,6 +289,12 @@ private struct FloatingWindowSettingsView: View {
                     detail: settingsStore.text(.backgroundFloatingWindowDetail),
                     isOn: $settingsStore.floatingWindowEnabled
                 )
+
+                SettingsToggleRow(
+                    title: settingsStore.text(.showFloatingDockInDebug),
+                    detail: settingsStore.text(.showFloatingDockInDebugDetail),
+                    isOn: $settingsStore.showFloatingDockInDebug
+                )
             }
             .listRowBackground(Color.clear)
 
@@ -438,5 +444,16 @@ private struct SettingsToggleRow: View {
             }
         }
         .tint(VmicTheme.blue)
+    }
+}
+
+private struct CompactCloseButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.caption.weight(.semibold))
+            .foregroundStyle(VmicTheme.blue)
+            .frame(width: 30, height: 30)
+            .background(VmicTheme.blue.opacity(configuration.isPressed ? 0.18 : 0.10), in: Circle())
+            .animation(.easeInOut(duration: 0.15), value: configuration.isPressed)
     }
 }

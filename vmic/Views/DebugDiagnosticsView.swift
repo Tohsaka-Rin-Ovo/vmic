@@ -36,6 +36,7 @@ struct DebugDiagnosticsView: View {
     @EnvironmentObject private var libraryStore: SoundLibraryStore
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @EnvironmentObject private var appChromeStore: AppChromeStore
     @EnvironmentObject private var diagnosticLogStore: DiagnosticLogStore
 
     let initialFocus: DebugFocusTarget?
@@ -154,12 +155,16 @@ struct DebugDiagnosticsView: View {
             .scrollIndicators(.hidden)
             .background(VmicTheme.appBackground)
             .onAppear {
+                appChromeStore.isDebugPageVisible = true
                 DiagnosticLogStore.shared.log(
                     "进入调试页",
                     source: .app,
                     details: ["initialFocus=\(initialFocus?.id ?? "overview")"]
                 )
                 scrollToInitialFocus(with: proxy)
+            }
+            .onDisappear {
+                appChromeStore.isDebugPageVisible = false
             }
         }
         .navigationTitle(settingsStore.text(.debug))

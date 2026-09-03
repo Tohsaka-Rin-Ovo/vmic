@@ -7,6 +7,7 @@ struct VmicApp: App {
     @StateObject private var libraryStore = SoundLibraryStore()
     @StateObject private var playbackManager = AudioPlaybackManager()
     @StateObject private var settingsStore = AppSettingsStore()
+    @StateObject private var appChromeStore = AppChromeStore()
     @StateObject private var diagnosticLogStore = DiagnosticLogStore.shared
 
     init() {
@@ -23,6 +24,7 @@ struct VmicApp: App {
                 .environmentObject(libraryStore)
                 .environmentObject(playbackManager)
                 .environmentObject(settingsStore)
+                .environmentObject(appChromeStore)
                 .environmentObject(diagnosticLogStore)
         }
     }
