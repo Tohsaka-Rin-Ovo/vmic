@@ -67,17 +67,16 @@ enum VmicText {
     case speechProbeInstruction
     case experimentAudio
     case experimentNoAudio
-    case localMonitorVolume
-    case bridgeSendVolume
-    case baselineTest
-    case mutedMonitorTest
+    case localPlaybackVolume
+    case normalPlaybackTest
+    case mutedPlaybackTest
     case stopTest
     case experimentInstruction
     case experimentReady
-    case experimentBaselineRunning
-    case experimentMutedMonitorRunning
-    case experimentBaselineFinished
-    case experimentMutedMonitorFinished
+    case experimentNormalPlaybackRunning
+    case experimentMutedPlaybackRunning
+    case experimentNormalPlaybackFinished
+    case experimentMutedPlaybackFinished
     case experimentStopped
     case experimentFailed(String)
     case themeSystem
@@ -312,9 +311,9 @@ final class AppSettingsStore: ObservableObject {
         case .noDebugLog:
             return "暂无日志，执行一次刷新、播放或验证后会显示。"
         case .monitorVolumeExperiment:
-            return "监听验证"
+            return "播放链路自检"
         case .monitorVolumeExperimentDetail:
-            return "验证本机监听音量能否与桥接发送音量分离。"
+            return "验证 vmic 能否正常读取文件、启动本机播放并调节输出音量。"
         case .officialSpeechProbe:
             return "官方语音对照"
         case .officialSpeechProbeDetail:
@@ -338,33 +337,31 @@ final class AppSettingsStore: ObservableObject {
         case .speechProbeFailed(let message):
             return "语音测试失败：\(message)"
         case .speechProbeInstruction:
-            return "判断顺序：先在 FaceTime 测这个语音，再测 KOOK。如果 FaceTime 能听到但 KOOK 听不到，说明 KOOK 通话链路不兼容；如果语音能听到但文件音频不行，问题集中在文件播放链路。"
+            return "判断顺序：先在 FaceTime 测这个语音，再测 KOOK。如果 FaceTime 也听不到，说明当前系统注入没有真正接入；如果语音能听到但文件音频不行，再看下方播放链路自检。"
         case .experimentAudio:
             return "测试音频"
         case .experimentNoAudio:
             return "请先在音频列表导入一个音频。"
-        case .localMonitorVolume:
-            return "本机监听音量"
-        case .bridgeSendVolume:
-            return "桥接发送音量"
-        case .baselineTest:
-            return "基线播放"
-        case .mutedMonitorTest:
-            return "静音监听"
+        case .localPlaybackVolume:
+            return "本机播放音量"
+        case .normalPlaybackTest:
+            return "正常播放"
+        case .mutedPlaybackTest:
+            return "静音播放"
         case .stopTest:
             return "停止测试"
         case .experimentInstruction:
-            return "测试时保持通话，先运行基线播放确认对方能听到，再运行静音监听。如果本机无声但对方仍能听到，说明监听分离有机会正式接入。"
+            return "这项只验证 vmic 的本机文件播放链路，不代表通话另一端一定能听到。真正判断注入是否成功，请以上方官方语音对照和实际通话反馈为准。"
         case .experimentReady:
             return "等待开始测试。"
-        case .experimentBaselineRunning:
-            return "基线播放中：本机监听为 100%，用于确认当前注入链路有效。"
-        case .experimentMutedMonitorRunning:
-            return "静音监听中：本机监听为 0%，桥接发送按滑块输出。"
-        case .experimentBaselineFinished:
-            return "基线播放已结束。"
-        case .experimentMutedMonitorFinished:
-            return "静音监听已结束，请记录对方是否仍能听到。"
+        case .experimentNormalPlaybackRunning:
+            return "正常播放中：如果本机可以清楚听到，说明文件读取和本机输出链路正常。"
+        case .experimentMutedPlaybackRunning:
+            return "静音播放中：本机输出音量为 0%，这只验证音量控制，不代表远端会听到。"
+        case .experimentNormalPlaybackFinished:
+            return "正常播放自检已结束。"
+        case .experimentMutedPlaybackFinished:
+            return "静音播放自检已结束。"
         case .experimentStopped:
             return "测试已停止。"
         case .experimentFailed(let message):
@@ -675,9 +672,9 @@ final class AppSettingsStore: ObservableObject {
         case .noDebugLog:
             return "No logs yet. Refresh, play, or run a probe to create entries."
         case .monitorVolumeExperiment:
-            return "Monitor Check"
+            return "Playback Self-Check"
         case .monitorVolumeExperimentDetail:
-            return "Checks whether local monitoring can be separated from bridge send volume."
+            return "Checks whether vmic can read the file, start local playback, and control output volume."
         case .officialSpeechProbe:
             return "Official Speech Probe"
         case .officialSpeechProbeDetail:
@@ -701,33 +698,31 @@ final class AppSettingsStore: ObservableObject {
         case .speechProbeFailed(let message):
             return "Speech probe failed: \(message)"
         case .speechProbeInstruction:
-            return "Recommended order: test this speech in FaceTime first, then KOOK. If FaceTime works but KOOK does not, KOOK is incompatible. If speech works but files do not, focus on the file playback path."
+            return "Recommended order: test this speech in FaceTime first, then KOOK. If FaceTime cannot hear it either, system injection is not actually connected. If speech works but files do not, use the playback self-check below."
         case .experimentAudio:
             return "Test Audio"
         case .experimentNoAudio:
             return "Import an audio file in the audio list first."
-        case .localMonitorVolume:
-            return "Local Monitor"
-        case .bridgeSendVolume:
-            return "Bridge Send"
-        case .baselineTest:
-            return "Baseline"
-        case .mutedMonitorTest:
-            return "Muted Monitor"
+        case .localPlaybackVolume:
+            return "Local Playback"
+        case .normalPlaybackTest:
+            return "Normal Playback"
+        case .mutedPlaybackTest:
+            return "Muted Playback"
         case .stopTest:
             return "Stop Test"
         case .experimentInstruction:
-            return "Stay in the call, run Baseline first to confirm the other side can hear it, then run Muted Monitor. If this iPhone is silent but the other side still hears audio, monitor separation is worth promoting to the main UI."
+            return "This only verifies vmic's local file playback path. It does not prove the other side of a call can hear it. Use the official speech probe and real call feedback to judge injection."
         case .experimentReady:
             return "Waiting to start."
-        case .experimentBaselineRunning:
-            return "Baseline is playing with local monitor at 100%."
-        case .experimentMutedMonitorRunning:
-            return "Muted Monitor is playing with local monitor at 0% and bridge send controlled by the slider."
-        case .experimentBaselineFinished:
-            return "Baseline finished."
-        case .experimentMutedMonitorFinished:
-            return "Muted Monitor finished. Record whether the other side still heard it."
+        case .experimentNormalPlaybackRunning:
+            return "Normal playback is running. If this iPhone hears it clearly, file reading and local output are working."
+        case .experimentMutedPlaybackRunning:
+            return "Muted playback is running with local output at 0%. This only verifies volume control; it does not imply remote audio."
+        case .experimentNormalPlaybackFinished:
+            return "Normal playback self-check finished."
+        case .experimentMutedPlaybackFinished:
+            return "Muted playback self-check finished."
         case .experimentStopped:
             return "Test stopped."
         case .experimentFailed(let message):

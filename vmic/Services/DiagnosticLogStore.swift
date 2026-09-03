@@ -6,7 +6,7 @@ enum DiagnosticLogSource: String, Equatable {
     case injection = "injection"
     case playback = "playback"
     case speechProbe = "speech-probe"
-    case monitorExperiment = "monitor-experiment"
+    case playbackSelfCheck = "playback-self-check"
     case floatingWindow = "floating-window"
     case library = "library"
 }

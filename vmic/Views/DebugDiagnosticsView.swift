@@ -40,7 +40,7 @@ struct DebugDiagnosticsView: View {
 
     let initialFocus: DebugFocusTarget?
 
-    @StateObject private var monitorExperiment = MonitorVolumeExperimentManager()
+    @StateObject private var playbackSelfCheck = PlaybackSelfCheckManager()
     @StateObject private var speechProbe = OfficialSpeechProbeManager()
 
     @State private var runningAction: DiagnosticAction?
@@ -129,11 +129,11 @@ struct DebugDiagnosticsView: View {
                         prepareForProbe: prepareForOfficialSpeechProbe
                     )
 
-                    MonitorVolumeExperimentCard(
+                    PlaybackSelfCheckCard(
                         clip: experimentClip,
                         soundsDirectory: libraryStore.soundsDirectory,
-                        experimentManager: monitorExperiment,
-                        prepareForExperiment: prepareForMonitorExperiment
+                        selfCheckManager: playbackSelfCheck,
+                        prepareForSelfCheck: prepareForPlaybackSelfCheck
                     )
 
                     DebugResultCard()
@@ -187,8 +187,8 @@ struct DebugDiagnosticsView: View {
         }
     }
 
-    private func prepareForMonitorExperiment() async {
-        DiagnosticLogStore.shared.log("准备监听验证", source: .monitorExperiment)
+    private func prepareForPlaybackSelfCheck() async {
+        DiagnosticLogStore.shared.log("准备播放链路自检", source: .playbackSelfCheck)
         playbackManager.stopAll()
         speechProbe.stop()
 
@@ -202,7 +202,7 @@ struct DebugDiagnosticsView: View {
     private func prepareForOfficialSpeechProbe() async {
         DiagnosticLogStore.shared.log("准备官方语音对照", source: .speechProbe)
         playbackManager.stopAll()
-        monitorExperiment.stop()
+        playbackSelfCheck.stop()
 
         if !injectionManager.isInjectionEnabled, injectionManager.permissionState.canEnableInjection {
             _ = await injectionManager.setInjectionEnabled(true)
@@ -626,14 +626,14 @@ private struct OfficialSpeechProbeCard: View {
     }
 }
 
-private struct MonitorVolumeExperimentCard: View {
+private struct PlaybackSelfCheckCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let clip: SoundClip?
     let soundsDirectory: URL
-    @ObservedObject var experimentManager: MonitorVolumeExperimentManager
-    let prepareForExperiment: () async -> Void
+    @ObservedObject var selfCheckManager: PlaybackSelfCheckManager
+    let prepareForSelfCheck: () async -> Void
 
     private var channelTint: Color {
         injectionManager.isInjectionAvailableInCurrentCall ? VmicTheme.mint : Color(red: 0.88, green: 0.58, blue: 0.12)
@@ -647,7 +647,7 @@ private struct MonitorVolumeExperimentCard: View {
         DebugCard(
             title: settingsStore.text(.monitorVolumeExperiment),
             subtitle: settingsStore.text(.monitorVolumeExperimentDetail),
-            systemImage: "ear",
+            systemImage: "speaker.wave.2",
             tint: VmicTheme.cyan
         ) {
             if let clip {
@@ -673,47 +673,41 @@ private struct MonitorVolumeExperimentCard: View {
             }
 
             ExperimentVolumeSlider(
-                title: settingsStore.text(.localMonitorVolume),
-                systemImage: "headphones",
-                value: $experimentManager.localMonitorVolume,
-                isDisabled: experimentManager.status == .running(.mutedMonitor)
-            )
-
-            ExperimentVolumeSlider(
-                title: settingsStore.text(.bridgeSendVolume),
-                systemImage: "waveform.badge.plus",
-                value: $experimentManager.bridgeSendVolume
+                title: settingsStore.text(.localPlaybackVolume),
+                systemImage: "speaker.wave.2",
+                value: $selfCheckManager.localPlaybackVolume,
+                isDisabled: selfCheckManager.status == .running(.mutedPlayback)
             )
 
             HStack(spacing: 10) {
                 Button {
-                    startBaseline()
+                    startNormalPlayback()
                 } label: {
                     DiagnosticActionLabel(
-                        title: settingsStore.text(.baselineTest),
+                        title: settingsStore.text(.normalPlaybackTest),
                         systemImage: "speaker.wave.2",
-                        isRunning: experimentManager.status == .running(.baseline)
+                        isRunning: selfCheckManager.status == .running(.normalPlayback)
                     )
                 }
                 .buttonStyle(DebugActionButtonStyle())
-                .disabled(clip == nil || experimentManager.isRunning || injectionManager.isChangingInjectionMode)
+                .disabled(clip == nil || selfCheckManager.isRunning || injectionManager.isChangingInjectionMode)
 
                 Button {
-                    startMutedMonitor()
+                    startMutedPlayback()
                 } label: {
                     DiagnosticActionLabel(
-                        title: settingsStore.text(.mutedMonitorTest),
+                        title: settingsStore.text(.mutedPlaybackTest),
                         systemImage: "speaker.slash",
-                        isRunning: experimentManager.status == .running(.mutedMonitor)
+                        isRunning: selfCheckManager.status == .running(.mutedPlayback)
                     )
                 }
                 .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.cyan))
-                .disabled(clip == nil || experimentManager.isRunning || injectionManager.isChangingInjectionMode)
+                .disabled(clip == nil || selfCheckManager.isRunning || injectionManager.isChangingInjectionMode)
             }
             .padding(.top, 4)
 
             Button {
-                experimentManager.stop()
+                selfCheckManager.stop()
             } label: {
                 DiagnosticActionLabel(
                     title: settingsStore.text(.stopTest),
@@ -722,9 +716,9 @@ private struct MonitorVolumeExperimentCard: View {
                 )
             }
             .buttonStyle(DebugActionButtonStyle(tint: VmicTheme.mutedInk))
-            .disabled(!experimentManager.isRunning)
+            .disabled(!selfCheckManager.isRunning)
 
-            ExperimentStatusBanner(status: experimentManager.status)
+            ExperimentStatusBanner(status: selfCheckManager.status)
 
             Text(settingsStore.text(.experimentInstruction))
                 .font(.footnote.weight(.medium))
@@ -733,13 +727,13 @@ private struct MonitorVolumeExperimentCard: View {
         }
     }
 
-    private func startBaseline() {
+    private func startNormalPlayback() {
         guard let clip else { return }
 
         Task {
-            await prepareForExperiment()
+            await prepareForSelfCheck()
             await MainActor.run {
-                experimentManager.playBaseline(
+                selfCheckManager.playNormalPlayback(
                     clip,
                     from: soundsDirectory,
                     reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
@@ -748,13 +742,13 @@ private struct MonitorVolumeExperimentCard: View {
         }
     }
 
-    private func startMutedMonitor() {
+    private func startMutedPlayback() {
         guard let clip else { return }
 
         Task {
-            await prepareForExperiment()
+            await prepareForSelfCheck()
             await MainActor.run {
-                experimentManager.playMutedMonitor(
+                selfCheckManager.playMutedPlayback(
                     clip,
                     from: soundsDirectory,
                     reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
@@ -800,7 +794,7 @@ private struct ExperimentVolumeSlider: View {
 private struct ExperimentStatusBanner: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
-    let status: MonitorVolumeExperimentStatus
+    let status: PlaybackSelfCheckStatus
 
     private var tint: Color {
         switch status {
@@ -851,14 +845,14 @@ private struct ExperimentStatusBanner: View {
         switch status {
         case .idle:
             return settingsStore.text(.experimentReady)
-        case .running(.baseline):
-            return settingsStore.text(.experimentBaselineRunning)
-        case .running(.mutedMonitor):
-            return settingsStore.text(.experimentMutedMonitorRunning)
-        case .finished(.baseline):
-            return settingsStore.text(.experimentBaselineFinished)
-        case .finished(.mutedMonitor):
-            return settingsStore.text(.experimentMutedMonitorFinished)
+        case .running(.normalPlayback):
+            return settingsStore.text(.experimentNormalPlaybackRunning)
+        case .running(.mutedPlayback):
+            return settingsStore.text(.experimentMutedPlaybackRunning)
+        case .finished(.normalPlayback):
+            return settingsStore.text(.experimentNormalPlaybackFinished)
+        case .finished(.mutedPlayback):
+            return settingsStore.text(.experimentMutedPlaybackFinished)
         case .stopped:
             return settingsStore.text(.experimentStopped)
         case .failed(let message):
@@ -957,12 +951,32 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         do {
+            let session = AVAudioSession.sharedInstance()
             DiagnosticLogStore.shared.log(
                 "官方语音对照开始",
                 source: .speechProbe,
-                details: ["textLength=\(text.count)"]
+                details: ["textLength=\(text.count)"] + Self.audioSessionDetails(session)
             )
+            do {
+                try session.setActive(true)
+                DiagnosticLogStore.shared.log(
+                    "官方语音音频会话已激活",
+                    source: .speechProbe,
+                    details: Self.audioSessionDetails(session)
+                )
+            } catch {
+                DiagnosticLogStore.shared.log(
+                    "官方语音音频会话激活失败，继续尝试",
+                    source: .speechProbe,
+                    details: ["error=\(error.localizedDescription)"] + Self.audioSessionDetails(session)
+                )
+            }
             try reapplyInjectionPreference?()
+            DiagnosticLogStore.shared.log(
+                "官方语音注入偏好已重申",
+                source: .speechProbe,
+                details: Self.audioSessionDetails(session)
+            )
 
             if synthesizer.isSpeaking {
                 DiagnosticLogStore.shared.log("停止上一段官方语音", source: .speechProbe)
@@ -985,7 +999,7 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
                 details: [
                     "voice=\(utterance.voice?.identifier ?? "default")",
                     "volume=\(utterance.volume)"
-                ]
+                ] + Self.audioSessionDetails(session)
             )
         } catch {
             status = .failed(error.localizedDescription)
@@ -1034,26 +1048,54 @@ private final class OfficialSpeechProbeManager: NSObject, ObservableObject, AVSp
             DiagnosticLogStore.shared.log("官方语音对照已取消", source: .speechProbe)
         }
     }
-}
 
-private enum MonitorVolumeExperimentKind: Equatable {
-    case baseline
-    case mutedMonitor
+    private static func audioSessionDetails(_ session: AVAudioSession) -> [String] {
+        var details = [
+            "category=\(session.category.rawValue)",
+            "mode=\(session.mode.rawValue)",
+            "sampleRate=\(Int(session.sampleRate.rounded()))",
+            "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
+            "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
+        ]
 
-    var logName: String {
-        switch self {
-        case .baseline:
-            return "baseline"
-        case .mutedMonitor:
-            return "mutedMonitor"
+        if #available(iOS 18.2, *) {
+            details.append("preferred=\(microphoneInjectionModeDescription(session.preferredMicrophoneInjectionMode))")
+            details.append("available=\(session.isMicrophoneInjectionAvailable)")
+        }
+
+        return details
+    }
+
+    private static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
+        switch mode {
+        case .none:
+            return "none"
+        case .spokenAudio:
+            return "spokenAudio"
+        @unknown default:
+            return "unknown"
         }
     }
 }
 
-private enum MonitorVolumeExperimentStatus: Equatable {
+private enum PlaybackSelfCheckKind: Equatable {
+    case normalPlayback
+    case mutedPlayback
+
+    var logName: String {
+        switch self {
+        case .normalPlayback:
+            return "normalPlayback"
+        case .mutedPlayback:
+            return "mutedPlayback"
+        }
+    }
+}
+
+private enum PlaybackSelfCheckStatus: Equatable {
     case idle
-    case running(MonitorVolumeExperimentKind)
-    case finished(MonitorVolumeExperimentKind)
+    case running(PlaybackSelfCheckKind)
+    case finished(PlaybackSelfCheckKind)
     case stopped
     case failed(String)
 
@@ -1074,29 +1116,19 @@ private enum MonitorVolumeExperimentStatus: Equatable {
 }
 
 @MainActor
-private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
+private final class PlaybackSelfCheckManager: NSObject, ObservableObject {
     private static let maximumTestDuration: TimeInterval = 12
 
-    @Published var localMonitorVolume: Double = 1 {
+    @Published var localPlaybackVolume: Double = 1 {
         didSet {
-            updateVolumes()
+            updateVolume()
         }
     }
-    @Published var bridgeSendVolume: Double = 1 {
-        didSet {
-            updateVolumes()
-        }
-    }
-    @Published private(set) var status: MonitorVolumeExperimentStatus = .idle
+    @Published private(set) var status: PlaybackSelfCheckStatus = .idle
 
-    private var engine: AVAudioEngine?
-    private var localPlayerNode: AVAudioPlayerNode?
-    private var bridgePlayerNode: AVAudioPlayerNode?
-    private var silentBridgeMixer: AVAudioMixerNode?
-    private var localAudioFile: AVAudioFile?
-    private var bridgeAudioFile: AVAudioFile?
+    private var player: AVAudioPlayer?
     private var finishTask: Task<Void, Never>?
-    private var lastLoggedVolumeSignature: String?
+    private var lastLoggedVolumeBucket: Int?
 
     var isRunning: Bool {
         if case .running = status {
@@ -1106,66 +1138,64 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         return false
     }
 
-    func playBaseline(
+    func playNormalPlayback(
         _ clip: SoundClip,
         from directory: URL,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         DiagnosticLogStore.shared.log(
-            "请求基线播放",
-            source: .monitorExperiment,
+            "请求正常播放自检",
+            source: .playbackSelfCheck,
             details: ["title=\(clip.title)"]
         )
-        localMonitorVolume = 1
-        bridgeSendVolume = 1
+        localPlaybackVolume = 1
         play(
             clip,
             from: directory,
-            kind: .baseline,
+            kind: .normalPlayback,
             reapplyInjectionPreference: reapplyInjectionPreference
         )
     }
 
-    func playMutedMonitor(
+    func playMutedPlayback(
         _ clip: SoundClip,
         from directory: URL,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         DiagnosticLogStore.shared.log(
-            "请求静音监听",
-            source: .monitorExperiment,
+            "请求静音播放自检",
+            source: .playbackSelfCheck,
             details: ["title=\(clip.title)"]
         )
-        localMonitorVolume = 0
-        bridgeSendVolume = 1
+        localPlaybackVolume = 0
         play(
             clip,
             from: directory,
-            kind: .mutedMonitor,
+            kind: .mutedPlayback,
             reapplyInjectionPreference: reapplyInjectionPreference
         )
     }
 
     func stop() {
         DiagnosticLogStore.shared.log(
-            "停止监听验证",
-            source: .monitorExperiment,
+            "停止播放链路自检",
+            source: .playbackSelfCheck,
             details: ["status=\(status.logName)"]
         )
-        stopEngineOnly()
+        stopPlayerOnly()
         status = .stopped
     }
 
     private func play(
         _ clip: SoundClip,
         from directory: URL,
-        kind: MonitorVolumeExperimentKind,
+        kind: PlaybackSelfCheckKind,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
         let url = clip.fileURL(in: directory)
         DiagnosticLogStore.shared.log(
-            "监听验证准备播放",
-            source: .monitorExperiment,
+            "播放链路自检准备播放",
+            source: .playbackSelfCheck,
             details: [
                 "kind=\(kind.logName)",
                 "title=\(clip.title)",
@@ -1175,70 +1205,37 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         )
 
         do {
-            stopEngineOnly()
+            stopPlayerOnly()
 
-            let localAudioFile = try AVAudioFile(forReading: url)
-            let bridgeAudioFile = try AVAudioFile(forReading: url)
-            let engine = AVAudioEngine()
-            let localPlayerNode = AVAudioPlayerNode()
-            let bridgePlayerNode = AVAudioPlayerNode()
-            let silentBridgeMixer = AVAudioMixerNode()
-            let format = localAudioFile.processingFormat
-            DiagnosticLogStore.shared.log(
-                "监听验证音频文件已打开",
-                source: .monitorExperiment,
-                details: [
-                    "kind=\(kind.logName)",
-                    "sampleRate=\(Int(format.sampleRate.rounded()))",
-                    "channels=\(format.channelCount)",
-                    "frames=\(localAudioFile.length)"
-                ]
-            )
-
-            engine.attach(localPlayerNode)
-            engine.attach(bridgePlayerNode)
-            engine.attach(silentBridgeMixer)
-            engine.connect(localPlayerNode, to: engine.mainMixerNode, format: format)
-            engine.connect(bridgePlayerNode, to: silentBridgeMixer, format: format)
-            engine.connect(silentBridgeMixer, to: engine.mainMixerNode, format: format)
-
-            localPlayerNode.volume = Float(clamped(localMonitorVolume))
-            bridgePlayerNode.volume = Float(clamped(bridgeSendVolume))
-            silentBridgeMixer.outputVolume = 0
-
-            let frameCount = frameCount(for: localAudioFile)
-            localPlayerNode.scheduleSegment(localAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
-            bridgePlayerNode.scheduleSegment(bridgeAudioFile, startingFrame: 0, frameCount: frameCount, at: nil)
-
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.volume = currentVolume(for: kind)
+            player.prepareToPlay()
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
-            try engine.start()
+
+            guard player.play() else {
+                throw PlaybackSelfCheckError.playbackDidNotStart
+            }
+
+            self.player = player
+            status = .running(kind)
             DiagnosticLogStore.shared.log(
-                "监听验证引擎已启动",
-                source: .monitorExperiment,
+                "播放链路自检已启动",
+                source: .playbackSelfCheck,
                 details: [
                     "kind=\(kind.logName)",
-                    "localVolume=\(localMonitorVolume)",
-                    "bridgeVolume=\(bridgeSendVolume)"
+                    "volume=\(formatPercent(Double(player.volume)))",
+                    "duration=\(formatSeconds(player.duration))",
+                    "sampleRate=\(Int(player.format.sampleRate.rounded()))",
+                    "channels=\(player.format.channelCount)"
                 ]
             )
-
-            self.engine = engine
-            self.localPlayerNode = localPlayerNode
-            self.bridgePlayerNode = bridgePlayerNode
-            self.silentBridgeMixer = silentBridgeMixer
-            self.localAudioFile = localAudioFile
-            self.bridgeAudioFile = bridgeAudioFile
-            status = .running(kind)
-
-            localPlayerNode.play()
-            bridgePlayerNode.play()
-            scheduleFinish(frameCount: frameCount, sampleRate: format.sampleRate, kind: kind)
+            scheduleFinish(duration: testDuration(for: player), kind: kind)
         } catch {
-            stopEngineOnly()
+            stopPlayerOnly()
             status = .failed(error.localizedDescription)
             DiagnosticLogStore.shared.log(
-                "监听验证失败",
-                source: .monitorExperiment,
+                "播放链路自检失败",
+                source: .playbackSelfCheck,
                 details: [
                     "kind=\(kind.logName)",
                     "error=\(error.localizedDescription)"
@@ -1247,46 +1244,49 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
         }
     }
 
-    private func updateVolumes() {
-        guard isRunning else { return }
+    private func updateVolume() {
+        guard isRunning, let player else { return }
 
-        if case .running(.mutedMonitor) = status {
-            localPlayerNode?.volume = 0
-        } else {
-            localPlayerNode?.volume = Float(clamped(localMonitorVolume))
+        if case .running(let kind) = status {
+            player.volume = currentVolume(for: kind)
         }
 
-        bridgePlayerNode?.volume = Float(clamped(bridgeSendVolume))
+        let percent = Int((Double(player.volume) * 100).rounded())
+        let bucket = percent / 5
 
-        let localPercent = Int((Double(localPlayerNode?.volume ?? -1) * 100).rounded())
-        let bridgePercent = Int((Double(bridgePlayerNode?.volume ?? -1) * 100).rounded())
-        let signature = "\(status.logName)|\(localPercent / 5)|\(bridgePercent / 5)"
+        guard bucket != lastLoggedVolumeBucket else { return }
 
-        guard signature != lastLoggedVolumeSignature else { return }
-
-        lastLoggedVolumeSignature = signature
+        lastLoggedVolumeBucket = bucket
         DiagnosticLogStore.shared.log(
-            "监听验证音量更新",
-            source: .monitorExperiment,
+            "播放链路自检音量更新",
+            source: .playbackSelfCheck,
             details: [
                 "status=\(status.logName)",
-                "local=\(localPercent)%",
-                "bridge=\(bridgePercent)%"
+                "volume=\(percent)%"
             ]
         )
     }
 
-    private func frameCount(for audioFile: AVAudioFile) -> AVAudioFrameCount {
-        let maximumFrames = AVAudioFramePosition(audioFile.processingFormat.sampleRate * Self.maximumTestDuration)
-        let selectedFrames = max(1, min(audioFile.length, maximumFrames))
-
-        return AVAudioFrameCount(selectedFrames)
+    private func currentVolume(for kind: PlaybackSelfCheckKind) -> Float {
+        switch kind {
+        case .normalPlayback:
+            return Float(clamped(localPlaybackVolume))
+        case .mutedPlayback:
+            return 0
+        }
     }
 
-    private func scheduleFinish(frameCount: AVAudioFrameCount, sampleRate: Double, kind: MonitorVolumeExperimentKind) {
+    private func testDuration(for player: AVAudioPlayer) -> TimeInterval {
+        guard player.duration.isFinite, player.duration > 0 else {
+            return Self.maximumTestDuration
+        }
+
+        return min(player.duration, Self.maximumTestDuration)
+    }
+
+    private func scheduleFinish(duration: TimeInterval, kind: PlaybackSelfCheckKind) {
         finishTask?.cancel()
 
-        let duration = sampleRate > 0 ? Double(frameCount) / sampleRate : 0
         let wait = UInt64(max(duration + 0.2, 0.5) * 1_000_000_000)
 
         finishTask = Task { [weak self] in
@@ -1295,57 +1295,91 @@ private final class MonitorVolumeExperimentManager: NSObject, ObservableObject {
             await MainActor.run {
                 guard let self, self.status == .running(kind) else { return }
 
-                self.stopEngineOnly()
+                self.stopPlayerOnly()
                 self.status = .finished(kind)
                 DiagnosticLogStore.shared.log(
-                    "监听验证自然结束",
-                    source: .monitorExperiment,
+                    "播放链路自检自然结束",
+                    source: .playbackSelfCheck,
                     details: ["kind=\(kind.logName)"]
                 )
             }
         }
     }
 
-    private func stopEngineOnly() {
+    private func stopPlayerOnly() {
         finishTask?.cancel()
         finishTask = nil
-        localPlayerNode?.stop()
-        bridgePlayerNode?.stop()
-        engine?.stop()
-        engine = nil
-        localPlayerNode = nil
-        bridgePlayerNode = nil
-        silentBridgeMixer = nil
-        localAudioFile = nil
-        bridgeAudioFile = nil
-        lastLoggedVolumeSignature = nil
+        player?.stop()
+        player = nil
+        lastLoggedVolumeBucket = nil
     }
 
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         DiagnosticLogStore.shared.log(
-            "监听验证配置音频会话开始",
-            source: .monitorExperiment,
-            details: [
-                "categoryBefore=\(session.category.rawValue)",
-                "modeBefore=\(session.mode.rawValue)"
-            ]
+            "播放链路自检配置音频会话开始",
+            source: .playbackSelfCheck,
+            details: Self.audioSessionDetails(session)
         )
         try session.setActive(true)
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
-            "监听验证配置音频会话完成",
-            source: .monitorExperiment,
-            details: [
-                "category=\(session.category.rawValue)",
-                "mode=\(session.mode.rawValue)",
-                "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
-            ]
+            "播放链路自检配置音频会话完成",
+            source: .playbackSelfCheck,
+            details: Self.audioSessionDetails(session)
         )
     }
 
     private func clamped(_ value: Double) -> Double {
         min(max(value, 0), 1)
+    }
+
+    private func formatPercent(_ value: Double) -> String {
+        "\(Int((value * 100).rounded()))%"
+    }
+
+    private func formatSeconds(_ seconds: TimeInterval) -> String {
+        guard seconds.isFinite, seconds > 0 else { return "unknown" }
+        return String(format: "%.2fs", seconds)
+    }
+
+    private static func audioSessionDetails(_ session: AVAudioSession) -> [String] {
+        var details = [
+            "category=\(session.category.rawValue)",
+            "mode=\(session.mode.rawValue)",
+            "sampleRate=\(Int(session.sampleRate.rounded()))",
+            "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
+            "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
+        ]
+
+        if #available(iOS 18.2, *) {
+            details.append("preferred=\(microphoneInjectionModeDescription(session.preferredMicrophoneInjectionMode))")
+            details.append("available=\(session.isMicrophoneInjectionAvailable)")
+        }
+
+        return details
+    }
+
+    private static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
+        switch mode {
+        case .none:
+            return "none"
+        case .spokenAudio:
+            return "spokenAudio"
+        @unknown default:
+            return "unknown"
+        }
+    }
+}
+
+private enum PlaybackSelfCheckError: LocalizedError {
+    case playbackDidNotStart
+
+    var errorDescription: String? {
+        switch self {
+        case .playbackDidNotStart:
+            return "系统没有启动本机音频播放。"
+        }
     }
 }
 
