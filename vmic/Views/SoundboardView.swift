@@ -471,7 +471,7 @@ private struct CoverArtworkView: View {
 
     var body: some View {
         Group {
-            if let artworkURL, let image = UIImage(contentsOfFile: artworkURL.path) {
+            if let image = CoverArtworkCache.image(for: artworkURL) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
@@ -483,6 +483,26 @@ private struct CoverArtworkView: View {
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private enum CoverArtworkCache {
+    private static let cache = NSCache<NSURL, UIImage>()
+
+    static func image(for artworkURL: URL?) -> UIImage? {
+        guard let artworkURL else { return nil }
+
+        let key = artworkURL as NSURL
+        if let cachedImage = cache.object(forKey: key) {
+            return cachedImage
+        }
+
+        guard let image = UIImage(contentsOfFile: artworkURL.path) else {
+            return nil
+        }
+
+        cache.setObject(image, forKey: key)
+        return image
     }
 }
 
@@ -663,6 +683,7 @@ struct BottomNowPlayingBar: View {
 
     @State private var compactDragStartPosition: CGPoint?
     @State private var compactDragLivePosition: CGPoint?
+    @State private var compactDragDidMove = false
     @State private var isDraggingDock = false
     @State private var shouldSpinCover = false
     @State private var dockContainerSize = CGSize(width: UIScreen.main.bounds.width - 32, height: 128)
@@ -789,6 +810,28 @@ struct BottomNowPlayingBar: View {
     }
 
     private var compactBody: some View {
+        ZStack(alignment: .topTrailing) {
+            compactPlaybackBubble
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    appChromeStore.floatingDockPresentation = .expanded
+                }
+            } label: {
+                Image(systemName: "rectangle.expand.vertical")
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(VmicTheme.blue)
+                    .frame(width: 24, height: 24)
+                    .background(.ultraThinMaterial, in: Circle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(settingsStore.text(.expandPlayer))
+        }
+        .frame(width: 82, height: 82)
+        .scaleEffect(isDraggingDock ? 0.96 : 1)
+    }
+
+    private var compactPlaybackBubble: some View {
         ZStack {
             CoverArtworkView(artworkURL: clip.artworkURL(in: artworkDirectory), size: 76)
                 .clipShape(Circle())
@@ -801,38 +844,12 @@ struct BottomNowPlayingBar: View {
             Circle()
                 .fill(Color.black.opacity(0.16))
 
-            Button(action: togglePlayback) {
-                Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                    .font(.headline.weight(.bold))
-                    .foregroundStyle(.white)
-                    .padding(11)
-                    .background(Color.black.opacity(0.22), in: Circle())
-            }
-            .buttonStyle(.plain)
-            .accessibilityLabel(isPlaying ? settingsStore.text(.pause) : settingsStore.text(.play))
-
-            VStack {
-                HStack {
-                    Spacer()
-
-                    Button {
-                        withAnimation(.easeInOut(duration: 0.18)) {
-                            appChromeStore.floatingDockPresentation = .expanded
-                        }
-                    } label: {
-                        Image(systemName: "rectangle.expand.vertical")
-                            .font(.caption2.weight(.bold))
-                            .foregroundStyle(VmicTheme.blue)
-                            .frame(width: 24, height: 24)
-                            .background(.ultraThinMaterial, in: Circle())
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel(settingsStore.text(.expandPlayer))
-                }
-
-                Spacer()
-            }
-            .padding(1)
+            Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                .font(.headline.weight(.bold))
+                .foregroundStyle(.white)
+                .padding(11)
+                .background(Color.black.opacity(0.22), in: Circle())
+                .allowsHitTesting(false)
         }
         .frame(width: 76, height: 76)
         .overlay {
@@ -840,19 +857,24 @@ struct BottomNowPlayingBar: View {
                 .stroke(Color.white.opacity(0.28), lineWidth: 1)
         }
         .contentShape(Circle())
-        .scaleEffect(isDraggingDock ? 0.96 : 1)
-        .highPriorityGesture(compactMoveGesture)
+        .gesture(compactInteractionGesture)
     }
 
-    private var compactMoveGesture: some Gesture {
-        DragGesture(minimumDistance: 12)
+    private var compactInteractionGesture: some Gesture {
+        DragGesture(minimumDistance: 0, coordinateSpace: .global)
             .onChanged { value in
                 if compactDragStartPosition == nil {
-                    isDraggingDock = true
                     compactDragStartPosition = clampedPosition(
                         appChromeStore.floatingDockPosition ?? defaultDockPosition(in: dockContainerSize),
                         in: dockContainerSize
                     )
+                }
+
+                guard dragDistance(value.translation) > 5 else { return }
+
+                if !compactDragDidMove {
+                    compactDragDidMove = true
+                    isDraggingDock = true
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 }
 
@@ -861,9 +883,26 @@ struct BottomNowPlayingBar: View {
                     x: anchor.x + value.translation.width,
                     y: anchor.y + value.translation.height
                 )
-                compactDragLivePosition = clampedPosition(proposed, in: dockContainerSize)
+                var transaction = Transaction()
+                transaction.disablesAnimations = true
+                withTransaction(transaction) {
+                    compactDragLivePosition = clampedPosition(proposed, in: dockContainerSize)
+                }
             }
             .onEnded { value in
+                let didMove = compactDragDidMove || dragDistance(value.translation) > 8
+                defer {
+                    isDraggingDock = false
+                    compactDragStartPosition = nil
+                    compactDragDidMove = false
+                }
+
+                guard didMove else {
+                    compactDragLivePosition = nil
+                    togglePlayback()
+                    return
+                }
+
                 let anchor = compactDragStartPosition ?? defaultDockPosition(in: dockContainerSize)
                 let proposed = CGPoint(
                     x: anchor.x + value.translation.width,
@@ -875,9 +914,6 @@ struct BottomNowPlayingBar: View {
                     appChromeStore.floatingDockPosition = snapped
                     compactDragLivePosition = nil
                 }
-
-                isDraggingDock = false
-                compactDragStartPosition = nil
             }
     }
 
@@ -939,9 +975,13 @@ struct BottomNowPlayingBar: View {
         )
     }
 
+    private func dragDistance(_ translation: CGSize) -> CGFloat {
+        sqrt(translation.width * translation.width + translation.height * translation.height)
+    }
+
     private func dockSize(in containerSize: CGSize) -> CGSize {
         if isCompact {
-            return CGSize(width: 76, height: 76)
+            return CGSize(width: 82, height: 82)
         }
 
         let availableWidth = max(containerSize.width - 32, 76)
