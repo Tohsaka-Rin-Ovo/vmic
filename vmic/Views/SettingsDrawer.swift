@@ -348,6 +348,26 @@ private struct AboutSettingsView: View {
                 }
             }
             .listRowBackground(Color.clear)
+
+            Section {
+                if let url = URL(string: "https://github.com/hatsune-miku/cakedesign-skill") {
+                    Link(destination: url) {
+                        HStack(spacing: 8) {
+                            Text("Proudly Crafted With CakeDesign.")
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(VmicTheme.mutedInk)
+
+                            Spacer(minLength: 8)
+
+                            Image(systemName: "arrow.up.right")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(VmicTheme.blue)
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+            }
+            .listRowBackground(Color.clear)
         }
         .listStyle(.plain)
         .scrollContentBackground(.hidden)
