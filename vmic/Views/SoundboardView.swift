@@ -837,7 +837,9 @@ struct BottomNowPlayingBar: View {
                 .clipShape(Circle())
                 .rotationEffect(.degrees(shouldSpinCover ? 360 : 0))
                 .animation(
-                    .linear(duration: 18).repeatForever(autoreverses: false),
+                    shouldSpinCover
+                        ? Animation.linear(duration: 18).repeatForever(autoreverses: false)
+                        : Animation.easeOut(duration: 0.12),
                     value: shouldSpinCover
                 )
 
