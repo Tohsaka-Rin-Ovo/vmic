@@ -37,7 +37,7 @@ struct ContentView: View {
     }
 
     private var floatingDockReservedHeight: CGFloat {
-        appChromeStore.floatingDockPresentation == .compact ? 102 : 116
+        appChromeStore.floatingDockPresentation == .compact ? 0 : 116
     }
 
     var body: some View {
