@@ -36,6 +36,10 @@ struct ContentView: View {
         return true
     }
 
+    private var floatingDockReservedHeight: CGFloat {
+        appChromeStore.floatingDockPresentation == .compact ? 102 : 116
+    }
+
     var body: some View {
         ZStack(alignment: .leading) {
             NavigationStack {
@@ -74,6 +78,12 @@ struct ContentView: View {
             }
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
+            if shouldShowFloatingDock {
+                Color.clear
+                    .frame(height: floatingDockReservedHeight)
+            }
+        }
+        .overlay(alignment: .bottom) {
             if shouldShowFloatingDock, let currentClip {
                 BottomNowPlayingBar(
                     clip: currentClip,
@@ -88,19 +98,10 @@ struct ContentView: View {
                     stopAction: {
                         playbackManager.stop(currentClip)
                     },
-                    previousAction: {
-                        skipPlayback(from: currentClip, direction: .previous)
-                    },
-                    nextAction: {
-                        skipPlayback(from: currentClip, direction: .next)
-                    },
                     seekAction: { progress in
                         playbackManager.seek(currentClip, toProgress: progress)
                     }
                 )
-                .padding(.horizontal, 16)
-                .padding(.bottom, 10)
-                .padding(.top, 4)
                 .zIndex(20)
             }
         }
@@ -229,38 +230,6 @@ struct ContentView: View {
         )
     }
 
-    private func skipPlayback(from clip: SoundClip, direction: PlaybackSkipDirection) {
-        guard let targetClip = adjacentClip(to: clip, direction: direction) else { return }
-
-        if settingsStore.singlePlayback {
-            playbackManager.stopAll()
-        } else {
-            playbackManager.stop(clip)
-        }
-
-        playbackManager.setOutputVolume(settingsStore.inputVolume)
-        playbackManager.play(
-            targetClip,
-            from: libraryStore.soundsDirectory,
-            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
-        )
-    }
-
-    private func adjacentClip(to clip: SoundClip, direction: PlaybackSkipDirection) -> SoundClip? {
-        let clips = libraryStore.clips
-        guard clips.count > 1, let index = clips.firstIndex(where: { $0.id == clip.id }) else {
-            return nil
-        }
-
-        switch direction {
-        case .previous:
-            return clips[index == clips.startIndex ? clips.index(before: clips.endIndex) : clips.index(before: index)]
-        case .next:
-            let nextIndex = clips.index(after: index)
-            return clips[nextIndex == clips.endIndex ? clips.startIndex : nextIndex]
-        }
-    }
-
     private func configurePlaybackFinishHandler() {
         playbackManager.playbackDidFinish = { [weak playbackManager, weak libraryStore, weak settingsStore, weak injectionManager] clipID in
             guard
@@ -350,9 +319,4 @@ struct ContentView: View {
             return "unknown"
         }
     }
-}
-
-private enum PlaybackSkipDirection {
-    case previous
-    case next
 }

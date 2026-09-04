@@ -13,6 +13,6 @@ enum FloatingDockPresentation: String, CaseIterable, Identifiable {
 final class AppChromeStore: ObservableObject {
     @Published var isDebugPageVisible = false
     @Published var floatingDockPresentation: FloatingDockPresentation = .expanded
-    @Published var floatingDockOffset: CGSize = .zero
+    @Published var floatingDockPosition: CGPoint?
     @Published var isPlaybackSettingsPresented = false
 }

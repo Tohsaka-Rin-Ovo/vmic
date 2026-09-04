@@ -659,14 +659,14 @@ struct BottomNowPlayingBar: View {
     let duration: TimeInterval?
     let togglePlayback: () -> Void
     let stopAction: () -> Void
-    let previousAction: () -> Void
-    let nextAction: () -> Void
     let seekAction: (Double) -> Void
 
     @State private var showCompactActions = false
-    @State private var dragAnchorOffset = CGSize.zero
+    @State private var dragAnchorPosition: CGPoint?
     @State private var didCaptureDragAnchor = false
+    @State private var isDraggingDock = false
     @State private var shouldSpinCover = false
+    @State private var dockContainerSize = CGSize(width: UIScreen.main.bounds.width - 32, height: 128)
 
     private var isPlaying: Bool {
         playbackState == .playing
@@ -677,20 +677,31 @@ struct BottomNowPlayingBar: View {
     }
 
     var body: some View {
-        ZStack(alignment: .topTrailing) {
-            if isCompact {
-                compactBody
-            } else {
-                expandedBody
-            }
+        GeometryReader { proxy in
+            let size = dockSize(in: proxy.size)
 
-            if isCompact && showCompactActions {
-                compactActionsPanel
-                    .offset(x: 10, y: -92)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+            ZStack(alignment: .topTrailing) {
+                if isCompact {
+                    compactBody
+                } else {
+                    expandedBody
+                }
+
+                if isCompact && showCompactActions {
+                    compactActionsPanel
+                        .offset(x: 8, y: -102)
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                }
+            }
+            .frame(width: size.width, height: size.height, alignment: .bottom)
+            .position(resolvedDockPosition(in: proxy.size))
+            .onAppear {
+                dockContainerSize = proxy.size
+            }
+            .onChange(of: proxy.size) { _, size in
+                dockContainerSize = size
             }
         }
-        .offset(appChromeStore.floatingDockOffset)
         .animation(.easeInOut(duration: 0.2), value: appChromeStore.floatingDockPresentation)
         .onAppear {
             refreshCoverSpin()
@@ -705,31 +716,34 @@ struct BottomNowPlayingBar: View {
     }
 
     private var expandedBody: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 10) {
             HStack(spacing: 10) {
                 movableHeader
 
                 Spacer(minLength: 6)
 
-                Button(action: togglePlayback) {
-                    Image(systemName: isPlaying ? "pause.fill" : "play.fill")
-                }
-                .buttonStyle(DockIconButtonStyle())
-                .accessibilityLabel(isPlaying ? settingsStore.text(.pause) : settingsStore.text(.play))
+                HStack(spacing: 6) {
+                    Button(action: togglePlayback) {
+                        Image(systemName: isPlaying ? "pause.fill" : "play.fill")
+                    }
+                    .buttonStyle(DockIconButtonStyle())
+                    .accessibilityLabel(isPlaying ? settingsStore.text(.pause) : settingsStore.text(.play))
 
-                Button {
-                    appChromeStore.isPlaybackSettingsPresented = true
-                } label: {
-                    Image(systemName: "slider.horizontal.3")
-                }
-                .buttonStyle(DockIconButtonStyle())
-                .accessibilityLabel(settingsStore.text(.playbackSettings))
+                    Button {
+                        appChromeStore.isPlaybackSettingsPresented = true
+                    } label: {
+                        Image(systemName: "slider.horizontal.3")
+                    }
+                    .buttonStyle(DockIconButtonStyle())
+                    .accessibilityLabel(settingsStore.text(.playbackSettings))
 
-                Button(action: stopAction) {
-                    Image(systemName: "xmark")
+                    Button(action: stopAction) {
+                        Image(systemName: "xmark")
+                    }
+                    .buttonStyle(DockIconButtonStyle())
+                    .accessibilityLabel(settingsStore.text(.stopPlayback))
                 }
-                .buttonStyle(DockIconButtonStyle())
-                .accessibilityLabel(settingsStore.text(.stopPlayback))
+                .fixedSize(horizontal: true, vertical: false)
             }
 
             PlaybackProgressBar(
@@ -739,11 +753,12 @@ struct BottomNowPlayingBar: View {
                 seekAction: seekAction
             )
         }
-        .padding(9)
+        .padding(10)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .scaleEffect(isDraggingDock ? 0.985 : 1)
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.white.opacity(0.64), lineWidth: 1)
+                .stroke(isDraggingDock ? VmicTheme.blue.opacity(0.42) : Color.white.opacity(0.64), lineWidth: 1)
         }
     }
 
@@ -761,7 +776,7 @@ struct BottomNowPlayingBar: View {
                     Image(systemName: "rectangle.compress.vertical")
                 }
                 .buttonStyle(DockCornerButtonStyle())
-                .offset(x: 5, y: -5)
+                .offset(x: 4, y: -4)
                 .accessibilityLabel(settingsStore.text(.compactPlayer))
             }
 
@@ -781,8 +796,7 @@ struct BottomNowPlayingBar: View {
             }
         }
         .contentShape(Rectangle())
-        .gesture(expandedMoveGesture)
-        .simultaneousGesture(expandedSwipeGesture)
+        .gesture(dockMoveGesture)
     }
 
     private var compactBody: some View {
@@ -852,51 +866,63 @@ struct BottomNowPlayingBar: View {
         }
     }
 
-    private var expandedMoveGesture: some Gesture {
-        LongPressGesture(minimumDuration: 0.34)
+    private var dockMoveGesture: some Gesture {
+        LongPressGesture(minimumDuration: 0.22)
             .sequenced(before: DragGesture(minimumDistance: 0))
             .onChanged { value in
                 switch value {
                 case .first(true):
                     if !didCaptureDragAnchor {
                         didCaptureDragAnchor = true
-                        dragAnchorOffset = appChromeStore.floatingDockOffset
+                        isDraggingDock = true
+                        dragAnchorPosition = appChromeStore.floatingDockPosition
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
                     }
                 case .second(true, let drag?):
-                    let proposed = CGSize(
-                        width: dragAnchorOffset.width + drag.translation.width,
-                        height: dragAnchorOffset.height + drag.translation.height
+                    let anchor = dragAnchorPosition ?? defaultDockPosition(in: dockContainerSize)
+                    let proposed = CGPoint(
+                        x: anchor.x + drag.translation.width,
+                        y: anchor.y + drag.translation.height
                     )
-                    appChromeStore.floatingDockOffset = clampOffset(proposed)
+                    appChromeStore.floatingDockPosition = clampedPosition(proposed, in: dockContainerSize)
                 default:
                     break
                 }
             }
             .onEnded { _ in
                 didCaptureDragAnchor = false
+                isDraggingDock = false
+                dragAnchorPosition = nil
             }
     }
 
-    private var expandedSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 18)
-            .onEnded { value in
-                let horizontal = value.translation.width
-                let vertical = abs(value.translation.height)
-                guard abs(horizontal) > 54, abs(horizontal) > vertical * 1.35 else { return }
-
-                if horizontal > 0 {
-                    previousAction()
-                } else {
-                    nextAction()
-                }
-            }
+    private func resolvedDockPosition(in containerSize: CGSize) -> CGPoint {
+        let position = appChromeStore.floatingDockPosition ?? defaultDockPosition(in: containerSize)
+        return clampedPosition(position, in: containerSize)
     }
 
-    private func clampOffset(_ offset: CGSize) -> CGSize {
-        CGSize(
-            width: min(max(offset.width, -160), 160),
-            height: min(max(offset.height, -360), 100)
+    private func defaultDockPosition(in containerSize: CGSize) -> CGPoint {
+        let size = dockSize(in: containerSize)
+        CGPoint(
+            x: containerSize.width / 2,
+            y: containerSize.height - size.height / 2 - 10
         )
+    }
+
+    private func clampedPosition(_ position: CGPoint, in containerSize: CGSize) -> CGPoint {
+        let size = dockSize(in: containerSize)
+        let horizontalInset = size.width / 2 + 12
+        let verticalInset = size.height / 2 + 12
+        return CGPoint(
+            x: min(max(position.x, horizontalInset), max(horizontalInset, containerSize.width - horizontalInset)),
+            y: min(max(position.y, verticalInset), max(verticalInset, containerSize.height - verticalInset))
+        )
+    }
+
+    private func dockSize(in containerSize: CGSize) -> CGSize {
+        isCompact
+            ? CGSize(width: 76, height: 76)
+            : CGSize(width: max(min(containerSize.width - 32, 390), 300), height: 108)
     }
 
     private func refreshCoverSpin() {
@@ -920,84 +946,91 @@ struct PlaybackSessionSettingsView: View {
     let close: () -> Void
 
     private var queueClips: [SoundClip] {
-        libraryStore.clips
+        guard
+            let currentClipID = playbackManager.currentClipID,
+            let currentIndex = libraryStore.clips.firstIndex(where: { $0.id == currentClipID })
+        else {
+            return libraryStore.clips
+        }
+
+        var clips = libraryStore.clips
+        let currentClip = clips.remove(at: currentIndex)
+        return [currentClip] + clips
     }
 
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    if queueClips.isEmpty {
-                        Text(settingsStore.text(.noCurrentPlaybackList))
-                            .font(.footnote.weight(.medium))
-                            .foregroundStyle(VmicTheme.mutedInk)
-                            .padding(.vertical, 4)
-                    } else {
-                        ForEach(queueClips) { clip in
-                            PlaybackQueueRow(
-                                clip: clip,
-                                artworkDirectory: libraryStore.artworkDirectory,
-                                isCurrent: playbackManager.currentClipID == clip.id,
-                                playbackState: playbackManager.playbackState(for: clip.id),
-                                progress: playbackManager.playbackProgress(for: clip.id),
-                                elapsedTime: playbackManager.elapsedTime(for: clip.id),
-                                duration: playbackManager.duration(for: clip.id) ?? clip.durationSeconds,
-                                playAction: {
-                                    playFromQueue(clip)
+            ScrollView {
+                VStack(spacing: 14) {
+                    PlaybackSettingsPanel(title: settingsStore.text(.currentPlaybackList)) {
+                        if queueClips.isEmpty {
+                            Text(settingsStore.text(.noCurrentPlaybackList))
+                                .font(.footnote.weight(.medium))
+                                .foregroundStyle(VmicTheme.mutedInk)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(.vertical, 4)
+                        } else {
+                            VStack(spacing: 6) {
+                                ForEach(queueClips) { clip in
+                                    PlaybackQueueRow(
+                                        clip: clip,
+                                        artworkDirectory: libraryStore.artworkDirectory,
+                                        isCurrent: playbackManager.currentClipID == clip.id,
+                                        playbackState: playbackManager.playbackState(for: clip.id),
+                                        progress: playbackManager.playbackProgress(for: clip.id),
+                                        elapsedTime: playbackManager.elapsedTime(for: clip.id),
+                                        duration: playbackManager.duration(for: clip.id) ?? clip.durationSeconds,
+                                        playAction: {
+                                            playFromQueue(clip)
+                                        }
+                                    )
                                 }
-                            )
+                            }
                         }
                     }
-                } header: {
-                    Text(settingsStore.text(.currentPlaybackList))
+
+                    PlaybackSettingsPanel(title: settingsStore.text(.playbackMode)) {
+                        Picker(settingsStore.text(.playbackMode), selection: $settingsStore.playbackMode) {
+                            ForEach(PlaybackMode.allCases) { mode in
+                                Text(playbackModeTitle(mode)).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+
+                        Text(settingsStore.text(.playbackSettingsDetail))
+                            .font(.footnote)
+                            .foregroundStyle(VmicTheme.mutedInk)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    PlaybackSettingsPanel(title: settingsStore.text(.playbackLimit)) {
+                        Picker(settingsStore.text(.playbackLimit), selection: $settingsStore.playbackLimitMode) {
+                            Text(settingsStore.text(.playbackLimitUnlimited)).tag(PlaybackLimitMode.unlimited)
+                            Text(settingsStore.text(.playbackLimitPlayCount)).tag(PlaybackLimitMode.playCount)
+                            Text(settingsStore.text(.playbackLimitMinutes)).tag(PlaybackLimitMode.minutes)
+                        }
+                        .pickerStyle(.segmented)
+
+                        if settingsStore.playbackLimitMode == .playCount {
+                            Stepper(value: $settingsStore.playbackLimitCount, in: 1...99) {
+                                Text(settingsStore.text(.playbackLimitCountValue(settingsStore.playbackLimitCount)))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(VmicTheme.ink)
+                            }
+                        } else if settingsStore.playbackLimitMode == .minutes {
+                            Stepper(value: $settingsStore.playbackLimitMinutes, in: 1...180, step: 1) {
+                                Text(settingsStore.text(.playbackLimitMinutesValue(settingsStore.playbackLimitMinutes)))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(VmicTheme.ink)
+                            }
+                        }
+                    }
                 }
-                .listRowBackground(Color.clear)
-
-                Section {
-                    Picker(settingsStore.text(.playbackMode), selection: $settingsStore.playbackMode) {
-                        ForEach(PlaybackMode.allCases) { mode in
-                            Text(playbackModeTitle(mode)).tag(mode)
-                        }
-                    }
-                    .pickerStyle(.segmented)
-
-                    Text(settingsStore.text(.playbackSettingsDetail))
-                        .font(.footnote)
-                        .foregroundStyle(VmicTheme.mutedInk)
-                        .fixedSize(horizontal: false, vertical: true)
-                } header: {
-                    Text(settingsStore.text(.playbackMode))
-                }
-                .listRowBackground(Color.clear)
-
-                Section {
-                    Picker(settingsStore.text(.playbackLimit), selection: $settingsStore.playbackLimitMode) {
-                        Text(settingsStore.text(.playbackLimitUnlimited)).tag(PlaybackLimitMode.unlimited)
-                        Text(settingsStore.text(.playbackLimitPlayCount)).tag(PlaybackLimitMode.playCount)
-                        Text(settingsStore.text(.playbackLimitMinutes)).tag(PlaybackLimitMode.minutes)
-                    }
-                    .pickerStyle(.segmented)
-
-                    if settingsStore.playbackLimitMode == .playCount {
-                        Stepper(value: $settingsStore.playbackLimitCount, in: 1...99) {
-                            Text(settingsStore.text(.playbackLimitCountValue(settingsStore.playbackLimitCount)))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(VmicTheme.ink)
-                        }
-                    } else if settingsStore.playbackLimitMode == .minutes {
-                        Stepper(value: $settingsStore.playbackLimitMinutes, in: 1...180, step: 1) {
-                            Text(settingsStore.text(.playbackLimitMinutesValue(settingsStore.playbackLimitMinutes)))
-                                .font(.subheadline.weight(.semibold))
-                                .foregroundStyle(VmicTheme.ink)
-                        }
-                    }
-                } header: {
-                    Text(settingsStore.text(.playbackLimit))
-                }
-                .listRowBackground(Color.clear)
+                .padding(.horizontal, 16)
+                .padding(.top, 14)
+                .padding(.bottom, 28)
             }
-            .listStyle(.plain)
-            .scrollContentBackground(.hidden)
+            .scrollIndicators(.hidden)
             .background(VmicTheme.drawerBackground)
             .navigationTitle(settingsStore.text(.playbackSettings))
             .navigationBarTitleDisplayMode(.inline)
@@ -1036,6 +1069,33 @@ struct PlaybackSessionSettingsView: View {
             volume: settingsStore.inputVolume,
             reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
         )
+    }
+}
+
+private struct PlaybackSettingsPanel<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(VmicTheme.ink)
+
+            content
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(VmicTheme.surface, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.62), lineWidth: 1)
+        }
     }
 }
 
