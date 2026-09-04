@@ -903,7 +903,7 @@ struct BottomNowPlayingBar: View {
 
     private func defaultDockPosition(in containerSize: CGSize) -> CGPoint {
         let size = dockSize(in: containerSize)
-        CGPoint(
+        return CGPoint(
             x: containerSize.width / 2,
             y: containerSize.height - size.height / 2 - 10
         )
@@ -920,7 +920,7 @@ struct BottomNowPlayingBar: View {
     }
 
     private func dockSize(in containerSize: CGSize) -> CGSize {
-        isCompact
+        return isCompact
             ? CGSize(width: 76, height: 76)
             : CGSize(width: max(min(containerSize.width - 32, 390), 300), height: 108)
     }
