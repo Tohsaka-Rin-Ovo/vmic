@@ -7,7 +7,7 @@ enum SoundPlaybackState: Equatable {
 }
 
 @MainActor
-final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDelegate {
+final class AudioPlaybackManager: ObservableObject {
     @Published private(set) var activeClipIDs: Set<UUID> = []
     @Published private(set) var pausedClipIDs: Set<UUID> = []
     @Published private(set) var currentClipID: UUID?
@@ -18,8 +18,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
 
     var playbackDidFinish: ((UUID) -> Void)?
 
-    private var playersByClipID: [UUID: AVAudioPlayer] = [:]
-    private var clipIDsByPlayerID: [ObjectIdentifier: UUID] = [:]
+    private let engine = AVAudioEngine()
+    private var sessionsByClipID: [UUID: EnginePlaybackSession] = [:]
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
     private var outputVolume: Float = 1
@@ -36,7 +36,11 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     }
 
     func elapsedTime(for clipID: UUID) -> TimeInterval {
-        elapsedTimeByClipID[clipID] ?? playersByClipID[clipID]?.currentTime ?? 0
+        if let session = sessionsByClipID[clipID] {
+            return seconds(for: currentFrame(in: session), sampleRate: session.sampleRate)
+        }
+
+        return elapsedTimeByClipID[clipID] ?? 0
     }
 
     func duration(for clipID: UUID) -> TimeInterval? {
@@ -44,11 +48,7 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             return duration
         }
 
-        guard let player = playersByClipID[clipID], player.duration.isFinite, player.duration > 0 else {
-            return nil
-        }
-
-        return player.duration
+        return sessionsByClipID[clipID]?.duration
     }
 
     func playbackStartedAt(for clipID: UUID) -> Date? {
@@ -69,35 +69,48 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     }
 
     func seek(clipID: UUID, toProgress progress: Double) {
-        guard let player = playersByClipID[clipID] else { return }
-
-        let duration = player.duration
-        guard duration.isFinite, duration > 0 else { return }
+        guard let session = sessionsByClipID[clipID], session.durationFrames > 0 else { return }
 
         let targetProgress = min(max(progress, 0), 1)
-        player.currentTime = duration * targetProgress
-        currentClipID = clipID
-        refreshPlaybackProgress()
-        DiagnosticLogStore.shared.log(
-            "调整播放进度",
-            source: .playback,
-            details: [
-                "clipID=\(shortID(clipID))",
-                "progress=\(formatPercent(targetProgress))",
-                "time=\(formatSeconds(player.currentTime))",
-                "duration=\(formatSeconds(duration))"
-            ]
-        )
+        let targetFrame = frame(for: targetProgress, in: session)
+        let wasPlaying = playbackState(for: clipID) == .playing
 
-        if player.isPlaying {
-            startProgressTimerIfNeeded()
+        do {
+            try reschedule(session, from: targetFrame, shouldPlay: wasPlaying)
+            currentClipID = clipID
+            refreshPlaybackProgress()
+            DiagnosticLogStore.shared.log(
+                "调整播放进度",
+                source: .playback,
+                details: [
+                    "clipID=\(shortID(clipID))",
+                    "progress=\(formatPercent(targetProgress))",
+                    "time=\(formatSeconds(seconds(for: targetFrame, sampleRate: session.sampleRate)))",
+                    "duration=\(formatSeconds(session.duration))",
+                    "engineRunning=\(engine.isRunning)"
+                ]
+            )
+
+            if wasPlaying {
+                startProgressTimerIfNeeded()
+            }
+        } catch {
+            lastError = "无法调整播放进度：\(error.localizedDescription)"
+            DiagnosticLogStore.shared.log(
+                "调整播放进度失败",
+                source: .playback,
+                details: [
+                    "clipID=\(shortID(clipID))",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
         }
     }
 
     func setOutputVolume(_ volume: Double) {
         outputVolume = Float(min(max(volume, 0), 1))
-        playersByClipID.values.forEach { player in
-            player.volume = outputVolume
+        sessionsByClipID.values.forEach { session in
+            session.node.volume = outputVolume
         }
 
         let shouldLog = lastLoggedOutputVolume.map { abs($0 - outputVolume) >= 0.01 } ?? true
@@ -106,7 +119,11 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             DiagnosticLogStore.shared.log(
                 "设置文件音频音量",
                 source: .playback,
-                details: ["volume=\(formatPercent(Double(outputVolume)))", "activePlayers=\(playersByClipID.count)"]
+                details: [
+                    "volume=\(formatPercent(Double(outputVolume)))",
+                    "activePlayers=\(sessionsByClipID.count)",
+                    "engineRunning=\(engine.isRunning)"
+                ]
             )
         }
     }
@@ -160,24 +177,27 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         do {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
 
-            let player = try AVAudioPlayer(contentsOf: url)
-            player.delegate = self
-            player.volume = outputVolume
-            player.prepareToPlay()
-
-            if let existingPlayer = playersByClipID[clip.id] {
-                existingPlayer.stop()
-                clipIDsByPlayerID[ObjectIdentifier(existingPlayer)] = nil
-                playersByClipID[clip.id] = nil
+            let audioFile = try AVAudioFile(forReading: url)
+            guard audioFile.length > 0 else {
+                throw AudioPlaybackError.emptyAudioFile
             }
 
-            let didStart = player.play()
-            guard didStart else {
+            removeSession(for: clip.id, preserveSessionCounters: true)
+
+            let session = EnginePlaybackSession(clipID: clip.id, audioFile: audioFile, url: url)
+            session.node.volume = outputVolume
+            engine.attach(session.node)
+            engine.connect(session.node, to: engine.mainMixerNode, format: audioFile.processingFormat)
+            sessionsByClipID[clip.id] = session
+
+            try schedule(session, from: 0)
+            try startEngineIfNeeded()
+            session.node.play()
+
+            guard session.node.isPlaying else {
                 throw AudioPlaybackError.playbackDidNotStart
             }
 
-            playersByClipID[clip.id] = player
-            clipIDsByPlayerID[ObjectIdentifier(player)] = clip.id
             activeClipIDs.insert(clip.id)
             pausedClipIDs.remove(clip.id)
             currentClipID = clip.id
@@ -193,27 +213,22 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             startProgressTimerIfNeeded()
             lastError = nil
             DiagnosticLogStore.shared.log(
-                "播放音频已调用",
+                "播放音频已进入 AudioEngine",
                 source: .playback,
                 details: [
                     "title=\(clip.title)",
                     "clipID=\(shortID(clip.id))",
-                    "didStart=\(didStart)",
-                    "duration=\(formatSeconds(player.duration))",
-                    "sampleRate=\(Int(player.format.sampleRate.rounded()))",
-                    "channels=\(player.format.channelCount)"
-                ]
+                    "duration=\(formatSeconds(session.duration))",
+                    "fileSampleRate=\(Int(session.sampleRate.rounded()))",
+                    "channels=\(audioFile.processingFormat.channelCount)",
+                    "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "engineRunning=\(engine.isRunning)"
+                ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
         } catch {
-            playersByClipID[clip.id] = nil
-            activeClipIDs.remove(clip.id)
-            pausedClipIDs.remove(clip.id)
-            playbackProgressByClipID[clip.id] = nil
-            elapsedTimeByClipID[clip.id] = nil
-            durationByClipID[clip.id] = nil
+            removeSession(for: clip.id)
             playbackStartedAtByClipID[clip.id] = nil
             playbackCompletionCountByClipID[clip.id] = nil
-            updateCurrentClip(afterRemoving: clip.id)
             lastError = "无法播放 \(clip.title)：\(error.localizedDescription)"
             DiagnosticLogStore.shared.log(
                 "播放音频失败",
@@ -222,15 +237,17 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
                     "title=\(clip.title)",
                     "clipID=\(shortID(clip.id))",
                     "error=\(error.localizedDescription)"
-                ]
+                ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
         }
     }
 
     func pause(_ clip: SoundClip) {
-        guard let player = playersByClipID[clip.id], activeClipIDs.contains(clip.id) else { return }
+        guard let session = sessionsByClipID[clip.id], activeClipIDs.contains(clip.id) else { return }
 
-        player.pause()
+        let frame = currentFrame(in: session)
+        session.pausedFrame = frame
+        session.node.pause()
         pausedClipIDs.insert(clip.id)
         currentClipID = clip.id
         refreshPlaybackProgress()
@@ -240,7 +257,8 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
             details: [
                 "title=\(clip.title)",
                 "clipID=\(shortID(clip.id))",
-                "time=\(formatSeconds(player.currentTime))"
+                "time=\(formatSeconds(seconds(for: frame, sampleRate: session.sampleRate)))",
+                "engineRunning=\(engine.isRunning)"
             ]
         )
     }
@@ -249,13 +267,16 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         _ clip: SoundClip,
         reapplyInjectionPreference: (@MainActor () throws -> Void)? = nil
     ) {
-        guard let player = playersByClipID[clip.id], activeClipIDs.contains(clip.id) else { return }
+        guard let session = sessionsByClipID[clip.id], activeClipIDs.contains(clip.id) else { return }
 
         do {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
-            player.volume = outputVolume
-            let didStart = player.play()
-            guard didStart else {
+            try startEngineIfNeeded()
+            session.node.volume = outputVolume
+            session.pausedFrame = nil
+            session.node.play()
+
+            guard session.node.isPlaying else {
                 throw AudioPlaybackError.playbackDidNotStart
             }
 
@@ -270,9 +291,10 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
                 details: [
                     "title=\(clip.title)",
                     "clipID=\(shortID(clip.id))",
-                    "didStart=\(didStart)",
-                    "time=\(formatSeconds(player.currentTime))"
-                ]
+                    "time=\(formatSeconds(elapsedTime(for: clip.id)))",
+                    "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "engineRunning=\(engine.isRunning)"
+                ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
         } catch {
             lastError = "无法继续播放 \(clip.title)：\(error.localizedDescription)"
@@ -289,104 +311,43 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     }
 
     func stop(_ clip: SoundClip) {
-        if let player = playersByClipID[clip.id] {
+        if let session = sessionsByClipID[clip.id] {
             DiagnosticLogStore.shared.log(
                 "停止音频",
                 source: .playback,
                 details: [
                     "title=\(clip.title)",
                     "clipID=\(shortID(clip.id))",
-                    "time=\(formatSeconds(player.currentTime))"
+                    "time=\(formatSeconds(seconds(for: currentFrame(in: session), sampleRate: session.sampleRate)))",
+                    "engineRunning=\(engine.isRunning)"
                 ]
             )
-            player.stop()
-            clipIDsByPlayerID[ObjectIdentifier(player)] = nil
         }
 
-        playersByClipID[clip.id] = nil
-        activeClipIDs.remove(clip.id)
-        pausedClipIDs.remove(clip.id)
-        playbackProgressByClipID[clip.id] = nil
-        elapsedTimeByClipID[clip.id] = nil
-        durationByClipID[clip.id] = nil
-        playbackStartedAtByClipID[clip.id] = nil
-        playbackCompletionCountByClipID[clip.id] = nil
-        updateCurrentClip(afterRemoving: clip.id)
-        stopProgressTimerIfNeeded()
+        removeSession(for: clip.id)
     }
 
     func stopAll() {
         DiagnosticLogStore.shared.log(
             "停止全部音频",
             source: .playback,
-            details: ["activePlayers=\(playersByClipID.count)"]
+            details: [
+                "activePlayers=\(sessionsByClipID.count)",
+                "engineRunning=\(engine.isRunning)"
+            ]
         )
-        playersByClipID.values.forEach { $0.stop() }
-        playersByClipID.removeAll()
-        clipIDsByPlayerID.removeAll()
-        activeClipIDs.removeAll()
-        pausedClipIDs.removeAll()
-        currentClipID = nil
-        playbackProgressByClipID.removeAll()
-        elapsedTimeByClipID.removeAll()
-        durationByClipID.removeAll()
+
+        Array(sessionsByClipID.keys).forEach { clipID in
+            removeSession(for: clipID)
+        }
         playbackStartedAtByClipID.removeAll()
         playbackCompletionCountByClipID.removeAll()
         progressTimer?.invalidate()
         progressTimer = nil
-    }
 
-    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
-        Task { @MainActor in
-            if let clipID = clipIDsByPlayerID[ObjectIdentifier(player)] {
-                DiagnosticLogStore.shared.log(
-                    "音频播放完成",
-                    source: .playback,
-                    details: [
-                        "clipID=\(shortID(clipID))",
-                        "successfully=\(flag)"
-                    ]
-                )
-                playbackCompletionCountByClipID[clipID, default: 0] += 1
-                playbackDidFinish?(clipID)
-            }
-            clear(player, preserveSessionCounters: true)
+        if engine.isRunning {
+            engine.pause()
         }
-    }
-
-    nonisolated func audioPlayerDecodeErrorDidOccur(_ player: AVAudioPlayer, error: Error?) {
-        Task { @MainActor in
-            lastError = error?.localizedDescription
-            DiagnosticLogStore.shared.log(
-                "音频解码错误",
-                source: .playback,
-                details: ["error=\(error?.localizedDescription ?? "unknown")"]
-            )
-            clear(player)
-        }
-    }
-
-    private func clear(_ player: AVAudioPlayer, preserveSessionCounters: Bool = false) {
-        let playerID = ObjectIdentifier(player)
-        guard let clipID = clipIDsByPlayerID[playerID] else { return }
-        let isCurrentPlayer = playersByClipID[clipID].map { ObjectIdentifier($0) == playerID } ?? false
-
-        if isCurrentPlayer {
-            playersByClipID[clipID] = nil
-            activeClipIDs.remove(clipID)
-            pausedClipIDs.remove(clipID)
-            playbackProgressByClipID[clipID] = nil
-            elapsedTimeByClipID[clipID] = nil
-            durationByClipID[clipID] = nil
-            if !preserveSessionCounters {
-                playbackStartedAtByClipID[clipID] = nil
-                playbackCompletionCountByClipID[clipID] = nil
-            }
-            updateCurrentClip(afterRemoving: clipID)
-        }
-
-        clipIDsByPlayerID[playerID] = nil
-        stopProgressTimerIfNeeded()
     }
 
     private func startProgressTimerIfNeeded() {
@@ -400,13 +361,13 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
     }
 
     private func stopProgressTimerIfNeeded() {
-        guard playersByClipID.isEmpty else { return }
+        guard sessionsByClipID.isEmpty else { return }
         progressTimer?.invalidate()
         progressTimer = nil
     }
 
     private func refreshPlaybackProgress() {
-        guard !playersByClipID.isEmpty else {
+        guard !sessionsByClipID.isEmpty else {
             playbackProgressByClipID.removeAll()
             elapsedTimeByClipID.removeAll()
             durationByClipID.removeAll()
@@ -418,18 +379,18 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         var elapsedByClipID: [UUID: TimeInterval] = [:]
         var durationByClipID: [UUID: TimeInterval] = [:]
 
-        for (clipID, player) in playersByClipID {
-            let duration = player.duration
-            let elapsed = max(player.currentTime, 0)
+        for (clipID, session) in sessionsByClipID {
+            let elapsedFrame = currentFrame(in: session)
+            let elapsed = seconds(for: elapsedFrame, sampleRate: session.sampleRate)
             elapsedByClipID[clipID] = elapsed
+            durationByClipID[clipID] = session.duration
 
-            guard duration.isFinite, duration > 0 else {
+            guard session.duration > 0 else {
                 progressByClipID[clipID] = 0
                 continue
             }
 
-            durationByClipID[clipID] = duration
-            progressByClipID[clipID] = min(max(elapsed / duration, 0), 1)
+            progressByClipID[clipID] = min(max(elapsed / session.duration, 0), 1)
         }
 
         playbackProgressByClipID = progressByClipID
@@ -447,43 +408,186 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         DiagnosticLogStore.shared.log(
             "配置播放音频会话开始",
             source: .playback,
-            details: [
-                "categoryBefore=\(session.category.rawValue)",
-                "modeBefore=\(session.mode.rawValue)",
-                "optionsBefore=\(session.categoryOptions.rawValue)",
-                "sampleRateBefore=\(Int(session.sampleRate.rounded()))"
-            ]
+            details: Self.audioSessionDetails(session)
         )
         try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
         DiagnosticLogStore.shared.log(
             "播放音频会话 setCategory 完成",
             source: .playback,
-            details: [
-                "category=\(session.category.rawValue)",
-                "mode=\(session.mode.rawValue)",
-                "options=\(session.categoryOptions.rawValue)"
-            ]
+            details: Self.audioSessionDetails(session)
         )
         try session.setActive(true)
         DiagnosticLogStore.shared.log(
             "播放音频会话 setActive 完成",
             source: .playback,
-            details: [
-                "sampleRate=\(Int(session.sampleRate.rounded()))",
-                "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
-                "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
-            ]
+            details: Self.audioSessionDetails(session)
         )
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
             "播放音频会话配置完成",
             source: .playback,
+            details: Self.audioSessionDetails(session)
+        )
+    }
+
+    private func startEngineIfNeeded() throws {
+        guard !engine.isRunning else { return }
+
+        engine.prepare()
+        try engine.start()
+        DiagnosticLogStore.shared.log(
+            "AudioEngine 已启动",
+            source: .playback,
             details: [
-                "category=\(session.category.rawValue)",
-                "mode=\(session.mode.rawValue)",
-                "options=\(session.categoryOptions.rawValue)"
+                "engineRunning=\(engine.isRunning)",
+                "outputSampleRate=\(Int(engine.outputNode.outputFormat(forBus: 0).sampleRate.rounded()))",
+                "mainMixerSampleRate=\(Int(engine.mainMixerNode.outputFormat(forBus: 0).sampleRate.rounded()))"
             ]
         )
+    }
+
+    private func schedule(_ session: EnginePlaybackSession, from frame: AVAudioFramePosition) throws {
+        let startFrame = min(max(frame, 0), max(session.durationFrames - 1, 0))
+        let remainingFrames = max(session.durationFrames - startFrame, 0)
+        guard remainingFrames > 0 else {
+            throw AudioPlaybackError.emptyAudioFile
+        }
+
+        session.generation += 1
+        session.startFrame = startFrame
+        session.pausedFrame = nil
+        let generation = session.generation
+        let token = session.token
+        let clipID = session.clipID
+        let frameCount = AVAudioFrameCount(min(remainingFrames, AVAudioFramePosition(UInt32.max)))
+
+        session.node.scheduleSegment(
+            session.audioFile,
+            startingFrame: startFrame,
+            frameCount: frameCount,
+            at: nil,
+            completionCallbackType: .dataPlayedBack
+        ) { [weak self, clipID, token, generation] _ in
+            Task { @MainActor in
+                self?.handlePlaybackCompletion(
+                    clipID: clipID,
+                    token: token,
+                    generation: generation
+                )
+            }
+        }
+
+        DiagnosticLogStore.shared.log(
+            "AudioEngine 已调度文件片段",
+            source: .playback,
+            details: [
+                "clipID=\(shortID(clipID))",
+                "startFrame=\(startFrame)",
+                "frameCount=\(frameCount)",
+                "duration=\(formatSeconds(session.duration))"
+            ]
+        )
+    }
+
+    private func reschedule(
+        _ session: EnginePlaybackSession,
+        from frame: AVAudioFramePosition,
+        shouldPlay: Bool
+    ) throws {
+        session.generation += 1
+        session.node.stop()
+        try schedule(session, from: frame)
+        session.pausedFrame = shouldPlay ? nil : session.startFrame
+
+        if shouldPlay {
+            try startEngineIfNeeded()
+            session.node.play()
+            pausedClipIDs.remove(session.clipID)
+        } else {
+            pausedClipIDs.insert(session.clipID)
+        }
+    }
+
+    private func removeSession(for clipID: UUID, preserveSessionCounters: Bool = false) {
+        guard let session = sessionsByClipID.removeValue(forKey: clipID) else {
+            activeClipIDs.remove(clipID)
+            pausedClipIDs.remove(clipID)
+            playbackProgressByClipID[clipID] = nil
+            elapsedTimeByClipID[clipID] = nil
+            durationByClipID[clipID] = nil
+            updateCurrentClip(afterRemoving: clipID)
+            stopProgressTimerIfNeeded()
+            return
+        }
+
+        session.generation += 1
+        session.node.stop()
+        engine.detach(session.node)
+
+        activeClipIDs.remove(clipID)
+        pausedClipIDs.remove(clipID)
+        playbackProgressByClipID[clipID] = nil
+        elapsedTimeByClipID[clipID] = nil
+        durationByClipID[clipID] = nil
+        if !preserveSessionCounters {
+            playbackStartedAtByClipID[clipID] = nil
+            playbackCompletionCountByClipID[clipID] = nil
+        }
+        updateCurrentClip(afterRemoving: clipID)
+        stopProgressTimerIfNeeded()
+
+        if sessionsByClipID.isEmpty, engine.isRunning {
+            engine.pause()
+        }
+    }
+
+    private func handlePlaybackCompletion(clipID: UUID, token: UUID, generation: Int) {
+        guard let session = sessionsByClipID[clipID],
+              session.token == token,
+              session.generation == generation,
+              !pausedClipIDs.contains(clipID) else {
+            return
+        }
+
+        DiagnosticLogStore.shared.log(
+            "音频播放完成",
+            source: .playback,
+            details: [
+                "clipID=\(shortID(clipID))",
+                "engineRunning=\(engine.isRunning)"
+            ]
+        )
+        playbackCompletionCountByClipID[clipID, default: 0] += 1
+        removeSession(for: clipID, preserveSessionCounters: true)
+        playbackDidFinish?(clipID)
+    }
+
+    private func currentFrame(in session: EnginePlaybackSession) -> AVAudioFramePosition {
+        if let pausedFrame = session.pausedFrame {
+            return pausedFrame
+        }
+
+        guard session.node.isPlaying,
+              let nodeTime = session.node.lastRenderTime,
+              let playerTime = session.node.playerTime(forNodeTime: nodeTime),
+              playerTime.sampleRate > 0 else {
+            return session.startFrame
+        }
+
+        let playedSeconds = Double(playerTime.sampleTime) / playerTime.sampleRate
+        let playedFrames = AVAudioFramePosition((playedSeconds * session.sampleRate).rounded())
+        return min(max(session.startFrame + playedFrames, 0), session.durationFrames)
+    }
+
+    private func frame(for progress: Double, in session: EnginePlaybackSession) -> AVAudioFramePosition {
+        guard session.durationFrames > 1 else { return 0 }
+        let maxFrame = session.durationFrames - 1
+        return AVAudioFramePosition((Double(maxFrame) * progress).rounded())
+    }
+
+    private func seconds(for frame: AVAudioFramePosition, sampleRate: Double) -> TimeInterval {
+        guard sampleRate > 0 else { return 0 }
+        return Double(max(frame, 0)) / sampleRate
     }
 
     private func playbackStateDescription(for clipID: UUID) -> String {
@@ -509,13 +613,72 @@ final class AudioPlaybackManager: NSObject, ObservableObject, AVAudioPlayerDeleg
         guard seconds.isFinite else { return "unknown" }
         return String(format: "%.2fs", seconds)
     }
+
+    private static func audioSessionDetails(_ session: AVAudioSession) -> [String] {
+        var details = [
+            "category=\(session.category.rawValue)",
+            "mode=\(session.mode.rawValue)",
+            "options=\(session.categoryOptions.rawValue)",
+            "sampleRate=\(Int(session.sampleRate.rounded()))",
+            "inputs=\(session.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ","))",
+            "outputs=\(session.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ","))"
+        ]
+
+        if #available(iOS 18.2, *) {
+            details.append("preferred=\(microphoneInjectionModeDescription(session.preferredMicrophoneInjectionMode))")
+            details.append("available=\(session.isMicrophoneInjectionAvailable)")
+        }
+
+        return details
+    }
+
+    private static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
+        switch mode {
+        case .none:
+            return "none"
+        case .spokenAudio:
+            return "spokenAudio"
+        @unknown default:
+            return "unknown"
+        }
+    }
+}
+
+private final class EnginePlaybackSession {
+    let token = UUID()
+    let clipID: UUID
+    let node = AVAudioPlayerNode()
+    let audioFile: AVAudioFile
+    let url: URL
+    let sampleRate: Double
+    let durationFrames: AVAudioFramePosition
+
+    var startFrame: AVAudioFramePosition = 0
+    var pausedFrame: AVAudioFramePosition?
+    var generation = 0
+
+    var duration: TimeInterval {
+        guard sampleRate > 0 else { return 0 }
+        return Double(durationFrames) / sampleRate
+    }
+
+    init(clipID: UUID, audioFile: AVAudioFile, url: URL) {
+        self.clipID = clipID
+        self.audioFile = audioFile
+        self.url = url
+        sampleRate = audioFile.processingFormat.sampleRate
+        durationFrames = audioFile.length
+    }
 }
 
 private enum AudioPlaybackError: LocalizedError {
+    case emptyAudioFile
     case playbackDidNotStart
 
     var errorDescription: String? {
         switch self {
+        case .emptyAudioFile:
+            return "音频文件没有可播放的采样帧。"
         case .playbackDidNotStart:
             return "系统没有启动音频播放。"
         }
