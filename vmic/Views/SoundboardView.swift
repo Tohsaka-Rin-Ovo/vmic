@@ -63,9 +63,13 @@ struct SoundboardView: View {
         }
         .task {
             playbackManager.setOutputVolume(settingsStore.inputVolume)
+            playbackManager.setVoiceOptimizedPlaybackEnabled(settingsStore.voiceOptimizedPlaybackEnabled)
         }
         .onChange(of: settingsStore.inputVolume) { _, newValue in
             playbackManager.setOutputVolume(newValue)
+        }
+        .onChange(of: settingsStore.voiceOptimizedPlaybackEnabled) { _, newValue in
+            playbackManager.setVoiceOptimizedPlaybackEnabled(newValue)
         }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)

@@ -112,6 +112,8 @@ struct InjectionControlPanel: View {
 
             InputVolumeControl()
 
+            VoiceOptimizedPlaybackToggle()
+
             Text(diagnosticText)
                 .font(.footnote.weight(.medium))
                 .foregroundStyle(VmicTheme.mutedInk)
@@ -148,6 +150,35 @@ struct InjectionControlPanel: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.72), lineWidth: 1)
         }
+    }
+}
+
+private struct VoiceOptimizedPlaybackToggle: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        Toggle(isOn: $settingsStore.voiceOptimizedPlaybackEnabled) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "waveform.path.ecg")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(VmicTheme.blue)
+                    .frame(width: 24, height: 24)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(settingsStore.text(.voiceOptimizedPlayback))
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(VmicTheme.ink)
+
+                    Text(settingsStore.text(.voiceOptimizedPlaybackDetail))
+                        .font(.caption.weight(.medium))
+                        .foregroundStyle(VmicTheme.mutedInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+        }
+        .tint(VmicTheme.blue)
+        .padding(12)
+        .background(VmicTheme.cyan.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 

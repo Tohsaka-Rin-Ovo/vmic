@@ -67,6 +67,7 @@ enum VmicText {
     case debug
     case debugLog
     case debugLogDetail
+    case debugSearchPlaceholder
     case copyDebugLog
     case copiedDebugLog
     case clearDebugLog
@@ -233,6 +234,8 @@ enum VmicText {
     case currentPlayback
     case inputVolume
     case inputVolumeDetail
+    case voiceOptimizedPlayback
+    case voiceOptimizedPlaybackDetail
     case volumePercent(Int)
     case singlePlayback
     case singlePlaybackDetail
@@ -314,6 +317,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var voiceOptimizedPlaybackEnabled: Bool {
+        didSet {
+            UserDefaults.standard.set(voiceOptimizedPlaybackEnabled, forKey: Self.voiceOptimizedPlaybackEnabledKey)
+        }
+    }
+
     @Published var showDuration: Bool {
         didSet {
             UserDefaults.standard.set(showDuration, forKey: Self.showDurationKey)
@@ -340,6 +349,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitCountKey = "vmic.playbackLimitCount"
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
+    private static let voiceOptimizedPlaybackEnabledKey = "vmic.voiceOptimizedPlaybackEnabled"
     private static let showDurationKey = "vmic.showDuration"
     private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
     private static let showFloatingDockInDebugKey = "vmic.showFloatingDockInDebug"
@@ -358,6 +368,7 @@ final class AppSettingsStore: ObservableObject {
         playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
+        voiceOptimizedPlaybackEnabled = UserDefaults.standard.object(forKey: Self.voiceOptimizedPlaybackEnabledKey) as? Bool ?? false
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
@@ -388,6 +399,8 @@ final class AppSettingsStore: ObservableObject {
             return "运行日志"
         case .debugLogDetail:
             return "记录最近的注入、播放、通道和验证事件。"
+        case .debugSearchPlaceholder:
+            return "搜索调试"
         case .copyDebugLog:
             return "复制日志"
         case .copiedDebugLog:
@@ -720,6 +733,10 @@ final class AppSettingsStore: ObservableObject {
             return "输入音量"
         case .inputVolumeDetail:
             return "控制音频文件播放并尝试加入通话时的音量；设为 0 会让文件音频静音。"
+        case .voiceOptimizedPlayback:
+            return "语音化处理"
+        case .voiceOptimizedPlaybackDetail:
+            return "播放文件时增强语音频段并压缩动态范围，尝试降低通话降噪把音乐压掉的概率；可在播放中开关。"
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:
@@ -797,6 +814,8 @@ final class AppSettingsStore: ObservableObject {
             return "Runtime Log"
         case .debugLogDetail:
             return "Records recent injection, playback, channel, and probe events."
+        case .debugSearchPlaceholder:
+            return "Search Debug"
         case .copyDebugLog:
             return "Copy Log"
         case .copiedDebugLog:
@@ -1129,6 +1148,10 @@ final class AppSettingsStore: ObservableObject {
             return "Input Volume"
         case .inputVolumeDetail:
             return "Controls audio file playback volume while vmic tries to add it to calls. Setting it to 0 mutes file audio."
+        case .voiceOptimizedPlayback:
+            return "Voice-Optimized Playback"
+        case .voiceOptimizedPlaybackDetail:
+            return "Boosts speech bands and compresses dynamic range during file playback to reduce the chance that call noise reduction suppresses music-like audio. You can toggle it while playing."
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:

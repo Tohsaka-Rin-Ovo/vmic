@@ -8,6 +8,12 @@ enum DebugFocusTarget: Hashable, Identifiable {
     case permission
     case channel
     case injectionSwitch
+    case officialSpeechProbe
+    case audioFileProbe
+    case playbackSelfCheck
+    case latestResult
+    case logs
+    case sessionDetails
 
     var id: String {
         switch self {
@@ -19,6 +25,18 @@ enum DebugFocusTarget: Hashable, Identifiable {
             return "channel"
         case .injectionSwitch:
             return "injectionSwitch"
+        case .officialSpeechProbe:
+            return "officialSpeechProbe"
+        case .audioFileProbe:
+            return "audioFileProbe"
+        case .playbackSelfCheck:
+            return "playbackSelfCheck"
+        case .latestResult:
+            return "latestResult"
+        case .logs:
+            return "logs"
+        case .sessionDetails:
+            return "sessionDetails"
         }
     }
 
@@ -26,7 +44,7 @@ enum DebugFocusTarget: Hashable, Identifiable {
         switch self {
         case .overview:
             return nil
-        case .permission, .channel, .injectionSwitch:
+        case .permission, .channel, .injectionSwitch, .officialSpeechProbe, .audioFileProbe, .playbackSelfCheck, .latestResult, .logs, .sessionDetails:
             return self
         }
     }
@@ -50,6 +68,8 @@ struct DebugDiagnosticsView: View {
     @State private var didCopyDiagnostics = false
     @State private var didCopyLogs = false
     @State private var highlightedFocus: DebugFocusTarget?
+    @State private var debugSearchText = ""
+    @State private var debugSearchWorkItem: DispatchWorkItem?
 
     init(initialFocus: DebugFocusTarget? = nil) {
         self.initialFocus = initialFocus
@@ -96,7 +116,12 @@ struct DebugDiagnosticsView: View {
         ScrollViewReader { proxy in
             ScrollView {
                 LazyVStack(spacing: 12) {
-                    DebugOverviewCard(diagnosticText: diagnosticText, tint: overviewTint)
+                    DebugOverviewCard(
+                        diagnosticText: diagnosticText,
+                        tint: overviewTint,
+                        isHighlighted: highlightedFocus == .overview
+                    )
+                    .id(DebugFocusTarget.overview)
 
                     DebugPermissionCard(
                         isHighlighted: highlightedFocus == .permission,
@@ -128,34 +153,44 @@ struct DebugDiagnosticsView: View {
                     .id(DebugFocusTarget.injectionSwitch)
 
                     OfficialSpeechProbeCard(
+                        isHighlighted: highlightedFocus == .officialSpeechProbe,
                         probeManager: speechProbe,
                         prepareForProbe: prepareForOfficialSpeechProbe
                     )
+                    .id(DebugFocusTarget.officialSpeechProbe)
 
                     AudioFileProbeCard(
+                        isHighlighted: highlightedFocus == .audioFileProbe,
                         clip: experimentClip,
                         soundsDirectory: libraryStore.soundsDirectory,
                         probeManager: audioFileProbe,
                         prepareForProbe: prepareForAudioFileProbe
                     )
+                    .id(DebugFocusTarget.audioFileProbe)
 
                     PlaybackSelfCheckCard(
+                        isHighlighted: highlightedFocus == .playbackSelfCheck,
                         clip: experimentClip,
                         soundsDirectory: libraryStore.soundsDirectory,
                         selfCheckManager: playbackSelfCheck,
                         prepareForSelfCheck: prepareForPlaybackSelfCheck
                     )
+                    .id(DebugFocusTarget.playbackSelfCheck)
 
-                    DebugResultCard()
+                    DebugResultCard(isHighlighted: highlightedFocus == .latestResult)
+                        .id(DebugFocusTarget.latestResult)
 
                     DebugLogCard(
+                        isHighlighted: highlightedFocus == .logs,
                         logStore: diagnosticLogStore,
                         didCopyLogs: didCopyLogs,
                         copyLogs: copyDiagnosticLogs,
                         clearLogs: clearDiagnosticLogs
                     )
+                    .id(DebugFocusTarget.logs)
 
-                    DebugSessionDetailsCard()
+                    DebugSessionDetailsCard(isHighlighted: highlightedFocus == .sessionDetails)
+                        .id(DebugFocusTarget.sessionDetails)
                 }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
@@ -174,6 +209,20 @@ struct DebugDiagnosticsView: View {
             }
             .onDisappear {
                 appChromeStore.isDebugPageVisible = false
+                debugSearchWorkItem?.cancel()
+            }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    DebugSearchField(
+                        text: $debugSearchText,
+                        submit: {
+                            performDebugSearch(with: proxy)
+                        }
+                    )
+                }
+            }
+            .onChange(of: debugSearchText) { _, _ in
+                scheduleDebugSearch(with: proxy)
             }
         }
         .navigationTitle(settingsStore.text(.debug))
@@ -184,21 +233,141 @@ struct DebugDiagnosticsView: View {
     private func scrollToInitialFocus(with proxy: ScrollViewProxy) {
         guard let initialFocus, initialFocus != .overview else { return }
 
-        highlightedFocus = initialFocus
-
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.28) {
-            withAnimation(.easeInOut(duration: 0.24)) {
-                proxy.scrollTo(initialFocus, anchor: .top)
-            }
+            focusDebugSection(initialFocus, with: proxy, highlightDuration: 1.45)
+        }
+    }
+
+    private func scheduleDebugSearch(with proxy: ScrollViewProxy) {
+        debugSearchWorkItem?.cancel()
+
+        let query = debugSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else {
+            highlightedFocus = nil
+            return
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.45) {
-            guard highlightedFocus == initialFocus else { return }
+        let workItem = DispatchWorkItem {
+            performDebugSearch(query, with: proxy)
+        }
+        debugSearchWorkItem = workItem
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.38, execute: workItem)
+    }
+
+    private func performDebugSearch(with proxy: ScrollViewProxy) {
+        debugSearchWorkItem?.cancel()
+        let query = debugSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+        performDebugSearch(query, with: proxy)
+    }
+
+    private func performDebugSearch(_ query: String, with proxy: ScrollViewProxy) {
+        guard let target = debugSearchTarget(matching: query) else { return }
+        focusDebugSection(target, with: proxy, highlightDuration: 2.4)
+    }
+
+    private func focusDebugSection(
+        _ target: DebugFocusTarget,
+        with proxy: ScrollViewProxy,
+        highlightDuration: TimeInterval
+    ) {
+        highlightedFocus = target
+
+        withAnimation(.easeInOut(duration: 0.24)) {
+            proxy.scrollTo(target, anchor: .top)
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + highlightDuration) {
+            guard highlightedFocus == target else { return }
 
             withAnimation(.easeInOut(duration: 0.22)) {
                 highlightedFocus = nil
             }
         }
+    }
+
+    private func debugSearchTarget(matching rawQuery: String) -> DebugFocusTarget? {
+        let query = normalizedSearchText(rawQuery)
+        guard !query.isEmpty else { return nil }
+
+        let audioFileCopy = AudioFileProbeCopy.make(language: settingsStore.language)
+        let candidates: [(DebugFocusTarget, [String])] = [
+            (.overview, [
+                settingsStore.text(.debug),
+                diagnosticText,
+                settingsStore.text(.systemPermission),
+                settingsStore.text(.injectionChannel),
+                settingsStore.text(.injectionSwitch)
+            ]),
+            (.permission, [
+                settingsStore.text(.systemPermission),
+                settingsStore.text(.permissionStateLabel),
+                injectionManager.permissionState.title(using: settingsStore),
+                injectionManager.permissionState.detail(using: settingsStore),
+                settingsStore.text(.requestPermission),
+                settingsStore.text(.openSystemSwitch)
+            ]),
+            (.channel, [
+                settingsStore.text(.injectionChannel),
+                settingsStore.text(.audioSessionDiagnosticsNote),
+                settingsStore.text(.directChannelCheck),
+                settingsStore.text(.notificationChannel),
+                injectionManager.channelDiagnosticsReport
+            ]),
+            (.injectionSwitch, [
+                settingsStore.text(.injectionSwitch),
+                settingsStore.text(.enableInjectionHelp),
+                settingsStore.text(.enableInjection),
+                settingsStore.text(.disableInjection)
+            ]),
+            (.officialSpeechProbe, [
+                settingsStore.text(.officialSpeechProbe),
+                settingsStore.text(.officialSpeechProbeDetail),
+                settingsStore.text(.speechProbePhrase),
+                settingsStore.text(.speechProbeInstruction)
+            ]),
+            (.audioFileProbe, [
+                audioFileCopy.title,
+                audioFileCopy.detail,
+                audioFileCopy.instruction,
+                audioFileCopy.referenceTitle,
+                experimentClip?.title ?? ""
+            ]),
+            (.playbackSelfCheck, [
+                settingsStore.text(.monitorVolumeExperiment),
+                settingsStore.text(.monitorVolumeExperimentDetail),
+                settingsStore.text(.experimentInstruction),
+                settingsStore.text(.localPlaybackVolume)
+            ]),
+            (.latestResult, [
+                settingsStore.text(.latestInjectionResult),
+                settingsStore.text(.noInjectionResult),
+                injectionManager.lastError ?? ""
+            ]),
+            (.sessionDetails, [
+                settingsStore.text(.audioSessionDiagnostics),
+                settingsStore.text(.currentCategory),
+                settingsStore.text(.currentMode),
+                settingsStore.text(.preferredInjectionMode),
+                settingsStore.text(.sampleRate),
+                injectionManager.channelDiagnosticsReport
+            ]),
+            (.logs, [
+                settingsStore.text(.debugLog),
+                settingsStore.text(.debugLogDetail),
+                diagnosticLogStore.exportText()
+            ])
+        ]
+
+        return candidates.first { _, fields in
+            fields.contains { normalizedSearchText($0).contains(query) }
+        }?.0
+    }
+
+    private func normalizedSearchText(_ text: String) -> String {
+        text
+            .folding(options: [.caseInsensitive, .diacriticInsensitive, .widthInsensitive], locale: .current)
+            .lowercased()
+            .trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private func prepareForPlaybackSelfCheck() async {
@@ -294,19 +463,63 @@ struct DebugDiagnosticsView: View {
     }
 }
 
+private struct DebugSearchField: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    @Binding var text: String
+    let submit: () -> Void
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(VmicTheme.mutedInk)
+
+            TextField(settingsStore.text(.debugSearchPlaceholder), text: $text)
+                .font(.caption.weight(.medium))
+                .foregroundStyle(VmicTheme.ink)
+                .textInputAutocapitalization(.never)
+                .disableAutocorrection(true)
+                .submitLabel(.search)
+                .onSubmit(submit)
+
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(VmicTheme.mutedInk.opacity(0.78))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(settingsStore.text(.cancel))
+            }
+        }
+        .padding(.horizontal, 9)
+        .frame(width: 142, height: 32)
+        .background(VmicTheme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .stroke(Color.white.opacity(0.72), lineWidth: 1)
+        }
+    }
+}
+
 private struct DebugOverviewCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     let diagnosticText: String
     let tint: Color
+    let isHighlighted: Bool
 
     var body: some View {
         DebugCard(
             title: settingsStore.text(.debug),
             subtitle: diagnosticText,
             systemImage: "stethoscope",
-            tint: tint
+            tint: tint,
+            isHighlighted: isHighlighted
         ) {
             HStack(spacing: 0) {
                 DebugMetric(
@@ -556,6 +769,7 @@ private struct OfficialSpeechProbeCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let isHighlighted: Bool
     @ObservedObject var probeManager: OfficialSpeechProbeManager
     let prepareForProbe: () async -> Void
 
@@ -581,7 +795,8 @@ private struct OfficialSpeechProbeCard: View {
             title: settingsStore.text(.officialSpeechProbe),
             subtitle: settingsStore.text(.officialSpeechProbeDetail),
             systemImage: "text.bubble",
-            tint: VmicTheme.blue
+            tint: VmicTheme.blue,
+            isHighlighted: isHighlighted
         ) {
             DebugInfoRow(
                 title: settingsStore.text(.speechProbePhraseLabel),
@@ -657,6 +872,7 @@ private struct PlaybackSelfCheckCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let isHighlighted: Bool
     let clip: SoundClip?
     let soundsDirectory: URL
     @ObservedObject var selfCheckManager: PlaybackSelfCheckManager
@@ -675,7 +891,8 @@ private struct PlaybackSelfCheckCard: View {
             title: settingsStore.text(.monitorVolumeExperiment),
             subtitle: settingsStore.text(.monitorVolumeExperimentDetail),
             systemImage: "speaker.wave.2",
-            tint: VmicTheme.cyan
+            tint: VmicTheme.cyan,
+            isHighlighted: isHighlighted
         ) {
             if let clip {
                 DebugInfoRow(title: settingsStore.text(.experimentAudio), value: clip.title)
@@ -790,6 +1007,7 @@ private struct AudioFileProbeCard: View {
     @EnvironmentObject private var playbackManager: AudioPlaybackManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let isHighlighted: Bool
     let clip: SoundClip?
     let soundsDirectory: URL
     @ObservedObject var probeManager: AudioFileProbeManager
@@ -809,7 +1027,8 @@ private struct AudioFileProbeCard: View {
             title: copy.title,
             subtitle: copy.detail,
             systemImage: "waveform.path.badge.magnifyingglass",
-            tint: VmicTheme.blue
+            tint: VmicTheme.blue,
+            isHighlighted: isHighlighted
         ) {
             if let clip {
                 DebugInfoRow(title: copy.currentAudio, value: clip.title)
@@ -2341,12 +2560,15 @@ private struct DebugResultCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let isHighlighted: Bool
+
     var body: some View {
         DebugCard(
             title: settingsStore.text(.latestInjectionResult),
             subtitle: injectionManager.lastError ?? settingsStore.text(.noError),
             systemImage: "waveform.path.ecg",
-            tint: resultTint
+            tint: resultTint,
+            isHighlighted: isHighlighted
         ) {
             if let result = injectionManager.lastModeChangeResult {
                 InjectionModeResultBanner(result: result, timestamp: injectionManager.lastModeChangeResultAt)
@@ -2383,6 +2605,7 @@ private struct DebugLogCard: View {
 
     @ObservedObject var logStore: DiagnosticLogStore
 
+    let isHighlighted: Bool
     let didCopyLogs: Bool
     let copyLogs: () -> Void
     let clearLogs: () -> Void
@@ -2396,7 +2619,8 @@ private struct DebugLogCard: View {
             title: settingsStore.text(.debugLog),
             subtitle: settingsStore.text(.debugLogDetail),
             systemImage: "doc.text.magnifyingglass",
-            tint: VmicTheme.blue
+            tint: VmicTheme.blue,
+            isHighlighted: isHighlighted
         ) {
             HStack(spacing: 10) {
                 Button(action: copyLogs) {
@@ -2474,12 +2698,15 @@ private struct DebugSessionDetailsCard: View {
     @EnvironmentObject private var injectionManager: MicrophoneInjectionManager
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    let isHighlighted: Bool
+
     var body: some View {
         DebugCard(
             title: settingsStore.text(.audioSessionDiagnostics),
             subtitle: "\(settingsStore.text(.device)) \(UIDevice.current.model) / \(settingsStore.text(.systemVersion)) \(UIDevice.current.systemVersion)",
             systemImage: "slider.horizontal.3",
-            tint: VmicTheme.blue
+            tint: VmicTheme.blue,
+            isHighlighted: isHighlighted
         ) {
             DebugInfoGrid {
                 DebugCompactValue(title: settingsStore.text(.minimumVersion), value: "iOS 18.2")

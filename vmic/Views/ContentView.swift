@@ -119,7 +119,11 @@ struct ContentView: View {
                 DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
             }
             configurePlaybackFinishHandler()
+            playbackManager.setVoiceOptimizedPlaybackEnabled(settingsStore.voiceOptimizedPlaybackEnabled)
             await injectionManager.refresh()
+        }
+        .onChange(of: settingsStore.voiceOptimizedPlaybackEnabled) { _, newValue in
+            playbackManager.setVoiceOptimizedPlaybackEnabled(newValue)
         }
         .onChange(of: scenePhase) { _, newPhase in
             Task { @MainActor in

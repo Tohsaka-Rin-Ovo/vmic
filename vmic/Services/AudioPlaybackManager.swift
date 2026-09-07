@@ -23,7 +23,9 @@ final class AudioPlaybackManager: ObservableObject {
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
     private var outputVolume: Float = 1
+    private var voiceOptimizedPlaybackEnabled = false
     private var lastLoggedOutputVolume: Float?
+    private var lastLoggedVoiceOptimizedState: Bool?
     private var progressTimer: Timer?
 
     func playbackState(for clipID: UUID) -> SoundPlaybackState? {
@@ -128,6 +130,25 @@ final class AudioPlaybackManager: ObservableObject {
         }
     }
 
+    func setVoiceOptimizedPlaybackEnabled(_ isEnabled: Bool) {
+        voiceOptimizedPlaybackEnabled = isEnabled
+        sessionsByClipID.values.forEach { session in
+            applyVoiceOptimizedPlaybackState(to: session)
+        }
+
+        guard lastLoggedVoiceOptimizedState != isEnabled else { return }
+        lastLoggedVoiceOptimizedState = isEnabled
+        DiagnosticLogStore.shared.log(
+            "设置语音化播放处理",
+            source: .playback,
+            details: [
+                "enabled=\(isEnabled)",
+                "activePlayers=\(sessionsByClipID.count)",
+                "engineRunning=\(engine.isRunning)"
+            ]
+        )
+    }
+
     func toggle(
         _ clip: SoundClip,
         from directory: URL,
@@ -186,8 +207,13 @@ final class AudioPlaybackManager: ObservableObject {
 
             let session = EnginePlaybackSession(clipID: clip.id, audioFile: audioFile, url: url)
             session.node.volume = outputVolume
+            configureVoiceOptimizedPlayback(for: session)
             engine.attach(session.node)
-            engine.connect(session.node, to: engine.mainMixerNode, format: audioFile.processingFormat)
+            engine.attach(session.voiceEqualizer)
+            engine.attach(session.voiceDynamics)
+            engine.connect(session.node, to: session.voiceEqualizer, format: audioFile.processingFormat)
+            engine.connect(session.voiceEqualizer, to: session.voiceDynamics, format: audioFile.processingFormat)
+            engine.connect(session.voiceDynamics, to: engine.mainMixerNode, format: audioFile.processingFormat)
             sessionsByClipID[clip.id] = session
 
             try schedule(session, from: 0)
@@ -228,6 +254,8 @@ final class AudioPlaybackManager: ObservableObject {
                     "fileSampleRate=\(Int(session.sampleRate.rounded()))",
                     "channels=\(audioFile.processingFormat.channelCount)",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "voiceOptimized=\(voiceOptimizedPlaybackEnabled)",
+                    "effectsBypassed=\(!voiceOptimizedPlaybackEnabled)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -279,6 +307,7 @@ final class AudioPlaybackManager: ObservableObject {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             try startEngineIfNeeded()
             session.node.volume = outputVolume
+            applyVoiceOptimizedPlaybackState(to: session)
             session.pausedFrame = nil
             session.node.play()
             try reapplyInjectionPreference?()
@@ -305,6 +334,7 @@ final class AudioPlaybackManager: ObservableObject {
                     "clipID=\(shortID(clip.id))",
                     "time=\(formatSeconds(elapsedTime(for: clip.id)))",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "voiceOptimized=\(voiceOptimizedPlaybackEnabled)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -450,6 +480,56 @@ final class AudioPlaybackManager: ObservableObject {
         )
     }
 
+    private func configureVoiceOptimizedPlayback(for session: EnginePlaybackSession) {
+        let bands = session.voiceEqualizer.bands
+
+        if bands.indices.contains(0) {
+            bands[0].filterType = .highPass
+            bands[0].frequency = 120
+            bands[0].bandwidth = 0.5
+            bands[0].gain = 0
+            bands[0].bypass = false
+        }
+
+        if bands.indices.contains(1) {
+            bands[1].filterType = .parametric
+            bands[1].frequency = 1_900
+            bands[1].bandwidth = 1.2
+            bands[1].gain = 4.5
+            bands[1].bypass = false
+        }
+
+        if bands.indices.contains(2) {
+            bands[2].filterType = .parametric
+            bands[2].frequency = 3_800
+            bands[2].bandwidth = 1.0
+            bands[2].gain = 3.0
+            bands[2].bypass = false
+        }
+
+        if bands.indices.contains(3) {
+            bands[3].filterType = .lowPass
+            bands[3].frequency = 8_200
+            bands[3].bandwidth = 0.5
+            bands[3].gain = 0
+            bands[3].bypass = false
+        }
+
+        session.voiceDynamics.threshold = -24
+        session.voiceDynamics.headRoom = 5
+        session.voiceDynamics.expansionRatio = 1
+        session.voiceDynamics.expansionThreshold = -60
+        session.voiceDynamics.attackTime = 0.004
+        session.voiceDynamics.releaseTime = 0.12
+        session.voiceDynamics.masterGain = 6
+        applyVoiceOptimizedPlaybackState(to: session)
+    }
+
+    private func applyVoiceOptimizedPlaybackState(to session: EnginePlaybackSession) {
+        session.voiceEqualizer.bypass = !voiceOptimizedPlaybackEnabled
+        session.voiceDynamics.bypass = !voiceOptimizedPlaybackEnabled
+    }
+
     private func schedule(_ session: EnginePlaybackSession, from frame: AVAudioFramePosition) throws {
         let startFrame = min(max(frame, 0), max(session.durationFrames - 1, 0))
         let remainingFrames = max(session.durationFrames - startFrame, 0)
@@ -526,7 +606,12 @@ final class AudioPlaybackManager: ObservableObject {
 
         session.generation += 1
         session.node.stop()
+        engine.disconnectNodeOutput(session.node)
+        engine.disconnectNodeOutput(session.voiceEqualizer)
+        engine.disconnectNodeOutput(session.voiceDynamics)
         engine.detach(session.node)
+        engine.detach(session.voiceEqualizer)
+        engine.detach(session.voiceDynamics)
 
         activeClipIDs.remove(clipID)
         pausedClipIDs.remove(clipID)
@@ -652,6 +737,8 @@ private final class EnginePlaybackSession {
     let token = UUID()
     let clipID: UUID
     let node = AVAudioPlayerNode()
+    let voiceEqualizer = AVAudioUnitEQ(numberOfBands: 4)
+    let voiceDynamics = AVAudioUnitDynamicsProcessor()
     let audioFile: AVAudioFile
     let url: URL
     let sampleRate: Double
