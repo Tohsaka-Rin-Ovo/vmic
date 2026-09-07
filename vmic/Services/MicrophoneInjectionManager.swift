@@ -330,6 +330,10 @@ final class MicrophoneInjectionManager: ObservableObject {
         pendingInjectionMode = enabled
 
         do {
+            if enabled {
+                prepareAppAudioSessionForInjection(reason: "enableInjection")
+            }
+
             try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
             lastInjectionModeChangeAt = Date()

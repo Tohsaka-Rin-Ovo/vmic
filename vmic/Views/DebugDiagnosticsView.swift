@@ -8,6 +8,7 @@ enum DebugFocusTarget: Hashable, Identifiable {
     case permission
     case channel
     case injectionSwitch
+    case playbackProcessing
     case officialSpeechProbe
     case audioFileProbe
     case playbackSelfCheck
@@ -25,6 +26,8 @@ enum DebugFocusTarget: Hashable, Identifiable {
             return "channel"
         case .injectionSwitch:
             return "injectionSwitch"
+        case .playbackProcessing:
+            return "playbackProcessing"
         case .officialSpeechProbe:
             return "officialSpeechProbe"
         case .audioFileProbe:
@@ -44,7 +47,7 @@ enum DebugFocusTarget: Hashable, Identifiable {
         switch self {
         case .overview:
             return nil
-        case .permission, .channel, .injectionSwitch, .officialSpeechProbe, .audioFileProbe, .playbackSelfCheck, .latestResult, .logs, .sessionDetails:
+        case .permission, .channel, .injectionSwitch, .playbackProcessing, .officialSpeechProbe, .audioFileProbe, .playbackSelfCheck, .latestResult, .logs, .sessionDetails:
             return self
         }
     }
@@ -152,6 +155,9 @@ struct DebugDiagnosticsView: View {
                     )
                     .id(DebugFocusTarget.injectionSwitch)
 
+                    DebugPlaybackProcessingCard(isHighlighted: highlightedFocus == .playbackProcessing)
+                        .id(DebugFocusTarget.playbackProcessing)
+
                     OfficialSpeechProbeCard(
                         isHighlighted: highlightedFocus == .officialSpeechProbe,
                         probeManager: speechProbe,
@@ -181,8 +187,8 @@ struct DebugDiagnosticsView: View {
                         .id(DebugFocusTarget.latestResult)
 
                     DebugLogCard(
-                        isHighlighted: highlightedFocus == .logs,
                         logStore: diagnosticLogStore,
+                        isHighlighted: highlightedFocus == .logs,
                         didCopyLogs: didCopyLogs,
                         copyLogs: copyDiagnosticLogs,
                         clearLogs: clearDiagnosticLogs
@@ -318,6 +324,18 @@ struct DebugDiagnosticsView: View {
                 settingsStore.text(.enableInjectionHelp),
                 settingsStore.text(.enableInjection),
                 settingsStore.text(.disableInjection)
+            ]),
+            (.playbackProcessing, [
+                settingsStore.text(.playbackProcessing),
+                settingsStore.text(.playbackProcessingDetail),
+                settingsStore.playbackProcessingTitle(settingsStore.playbackProcessingMode),
+                settingsStore.playbackProcessingDetail(settingsStore.playbackProcessingMode),
+                settingsStore.text(.playbackProcessingStandard),
+                settingsStore.text(.playbackProcessingStandardDetail),
+                settingsStore.text(.playbackProcessingOfficialLike),
+                settingsStore.text(.playbackProcessingOfficialLikeDetail),
+                settingsStore.text(.playbackProcessingCombined),
+                settingsStore.text(.playbackProcessingCombinedDetail)
             ]),
             (.officialSpeechProbe, [
                 settingsStore.text(.officialSpeechProbe),
@@ -761,6 +779,57 @@ private struct DebugSwitchCard: View {
             .buttonStyle(DebugActionButtonStyle(tint: injectionManager.isInjectionEnabled ? VmicTheme.mutedInk : VmicTheme.blue))
             .disabled(isBusy)
             .padding(.top, 4)
+        }
+    }
+}
+
+private struct DebugPlaybackProcessingCard: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let isHighlighted: Bool
+
+    var body: some View {
+        DebugCard(
+            title: settingsStore.text(.playbackProcessing),
+            subtitle: settingsStore.playbackProcessingDetail(settingsStore.playbackProcessingMode),
+            systemImage: "waveform.path.ecg",
+            tint: VmicTheme.blue,
+            isHighlighted: isHighlighted
+        ) {
+            VStack(spacing: 8) {
+                ForEach(PlaybackProcessingMode.allCases) { mode in
+                    Button {
+                        settingsStore.playbackProcessingMode = mode
+                    } label: {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: settingsStore.playbackProcessingMode == mode ? "checkmark.circle.fill" : "circle")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundStyle(settingsStore.playbackProcessingMode == mode ? VmicTheme.blue : VmicTheme.mutedInk.opacity(0.58))
+                                .frame(width: 22, height: 22)
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(settingsStore.playbackProcessingTitle(mode))
+                                    .font(.footnote.weight(.semibold))
+                                    .foregroundStyle(VmicTheme.ink)
+
+                                Text(settingsStore.playbackProcessingDetail(mode))
+                                    .font(.caption.weight(.medium))
+                                    .foregroundStyle(VmicTheme.mutedInk)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 0)
+                        }
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 9)
+                        .background(
+                            settingsStore.playbackProcessingMode == mode ? VmicTheme.blue.opacity(0.08) : Color.clear,
+                            in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
         }
     }
 }
@@ -1319,7 +1388,7 @@ private struct AudioFileProbeReport: Equatable {
             "playerDuration=\(formatDuration(playerDuration))",
             "peak=\(peakLevelText)",
             "rms=\(rmsLevelText)",
-            "warnings=\(warnings.map(\.rawValue).joined(separator: \",\"))"
+            "warnings=\(warnings.map(\.rawValue).joined(separator: ","))"
         ]
     }
 

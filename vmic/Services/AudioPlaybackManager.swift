@@ -23,9 +23,9 @@ final class AudioPlaybackManager: ObservableObject {
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
     private var outputVolume: Float = 1
-    private var voiceOptimizedPlaybackEnabled = false
+    private var playbackProcessingMode: PlaybackProcessingMode = .combinedVoice
     private var lastLoggedOutputVolume: Float?
-    private var lastLoggedVoiceOptimizedState: Bool?
+    private var lastLoggedPlaybackProcessingMode: PlaybackProcessingMode?
     private var progressTimer: Timer?
 
     func playbackState(for clipID: UUID) -> SoundPlaybackState? {
@@ -130,19 +130,21 @@ final class AudioPlaybackManager: ObservableObject {
         }
     }
 
-    func setVoiceOptimizedPlaybackEnabled(_ isEnabled: Bool) {
-        voiceOptimizedPlaybackEnabled = isEnabled
+    func setPlaybackProcessingMode(_ mode: PlaybackProcessingMode) {
+        playbackProcessingMode = mode
         sessionsByClipID.values.forEach { session in
-            applyVoiceOptimizedPlaybackState(to: session)
+            applyPlaybackProcessingMode(to: session)
         }
 
-        guard lastLoggedVoiceOptimizedState != isEnabled else { return }
-        lastLoggedVoiceOptimizedState = isEnabled
+        guard lastLoggedPlaybackProcessingMode != mode else { return }
+        lastLoggedPlaybackProcessingMode = mode
         DiagnosticLogStore.shared.log(
-            "设置语音化播放处理",
+            "设置文件播放处理方式",
             source: .playback,
             details: [
-                "enabled=\(isEnabled)",
+                "mode=\(mode.rawValue)",
+                "explicitSession=\(mode.usesExplicitAudioSession)",
+                "voiceShaping=\(mode.usesVoiceShaping)",
                 "activePlayers=\(sessionsByClipID.count)",
                 "engineRunning=\(engine.isRunning)"
             ]
@@ -207,13 +209,13 @@ final class AudioPlaybackManager: ObservableObject {
 
             let session = EnginePlaybackSession(clipID: clip.id, audioFile: audioFile, url: url)
             session.node.volume = outputVolume
-            configureVoiceOptimizedPlayback(for: session)
+            configurePlaybackProcessing(for: session)
             engine.attach(session.node)
             engine.attach(session.voiceEqualizer)
-            engine.attach(session.voiceDynamics)
+            engine.attach(session.voiceMixer)
             engine.connect(session.node, to: session.voiceEqualizer, format: audioFile.processingFormat)
-            engine.connect(session.voiceEqualizer, to: session.voiceDynamics, format: audioFile.processingFormat)
-            engine.connect(session.voiceDynamics, to: engine.mainMixerNode, format: audioFile.processingFormat)
+            engine.connect(session.voiceEqualizer, to: session.voiceMixer, format: audioFile.processingFormat)
+            engine.connect(session.voiceMixer, to: engine.mainMixerNode, format: audioFile.processingFormat)
             sessionsByClipID[clip.id] = session
 
             try schedule(session, from: 0)
@@ -221,7 +223,7 @@ final class AudioPlaybackManager: ObservableObject {
             session.node.play()
             try reapplyInjectionPreference?()
             DiagnosticLogStore.shared.log(
-                "AudioEngine 发声后已按官方式路径重申注入偏好",
+                "AudioEngine 发声后已重申注入偏好",
                 source: .playback,
                 details: Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -254,8 +256,8 @@ final class AudioPlaybackManager: ObservableObject {
                     "fileSampleRate=\(Int(session.sampleRate.rounded()))",
                     "channels=\(audioFile.processingFormat.channelCount)",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
-                    "voiceOptimized=\(voiceOptimizedPlaybackEnabled)",
-                    "effectsBypassed=\(!voiceOptimizedPlaybackEnabled)",
+                    "processingMode=\(playbackProcessingMode.rawValue)",
+                    "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -307,12 +309,12 @@ final class AudioPlaybackManager: ObservableObject {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             try startEngineIfNeeded()
             session.node.volume = outputVolume
-            applyVoiceOptimizedPlaybackState(to: session)
+            applyPlaybackProcessingMode(to: session)
             session.pausedFrame = nil
             session.node.play()
             try reapplyInjectionPreference?()
             DiagnosticLogStore.shared.log(
-                "AudioEngine 恢复发声后已按官方式路径重申注入偏好",
+                "AudioEngine 恢复发声后已重申注入偏好",
                 source: .playback,
                 details: Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -334,7 +336,8 @@ final class AudioPlaybackManager: ObservableObject {
                     "clipID=\(shortID(clip.id))",
                     "time=\(formatSeconds(elapsedTime(for: clip.id)))",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
-                    "voiceOptimized=\(voiceOptimizedPlaybackEnabled)",
+                    "processingMode=\(playbackProcessingMode.rawValue)",
+                    "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -448,18 +451,38 @@ final class AudioPlaybackManager: ObservableObject {
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         DiagnosticLogStore.shared.log(
-            "配置文件播放官方式会话开始",
+            "配置文件播放会话开始",
             source: .playback,
             details: Self.audioSessionDetails(session)
         )
+
+        if playbackProcessingMode.usesExplicitAudioSession {
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+            DiagnosticLogStore.shared.log(
+                "文件播放会话 setCategory 完成",
+                source: .playback,
+                details: Self.audioSessionDetails(session)
+            )
+
+            try session.setActive(true)
+            DiagnosticLogStore.shared.log(
+                "文件播放会话 setActive 完成",
+                source: .playback,
+                details: Self.audioSessionDetails(session)
+            )
+        }
+
         try reapplyInjectionPreference?()
+        let changedSession = playbackProcessingMode.usesExplicitAudioSession
+        let policy = changedSession ? "explicitSpokenAudio" : "preferredInjectionOnly"
         DiagnosticLogStore.shared.log(
-            "文件播放官方式会话配置完成",
+            "文件播放会话配置完成",
             source: .playback,
             details: [
-                "policy=preferredInjectionOnly",
-                "categoryChangedByVmic=false",
-                "activeChangedByVmic=false"
+                "mode=\(playbackProcessingMode.rawValue)",
+                "policy=\(policy)",
+                "categoryChangedByVmic=\(changedSession)",
+                "activeChangedByVmic=\(changedSession)"
             ] + Self.audioSessionDetails(session)
         )
     }
@@ -480,7 +503,7 @@ final class AudioPlaybackManager: ObservableObject {
         )
     }
 
-    private func configureVoiceOptimizedPlayback(for session: EnginePlaybackSession) {
+    private func configurePlaybackProcessing(for session: EnginePlaybackSession) {
         let bands = session.voiceEqualizer.bands
 
         if bands.indices.contains(0) {
@@ -515,19 +538,12 @@ final class AudioPlaybackManager: ObservableObject {
             bands[3].bypass = false
         }
 
-        session.voiceDynamics.threshold = -24
-        session.voiceDynamics.headRoom = 5
-        session.voiceDynamics.expansionRatio = 1
-        session.voiceDynamics.expansionThreshold = -60
-        session.voiceDynamics.attackTime = 0.004
-        session.voiceDynamics.releaseTime = 0.12
-        session.voiceDynamics.masterGain = 6
-        applyVoiceOptimizedPlaybackState(to: session)
+        applyPlaybackProcessingMode(to: session)
     }
 
-    private func applyVoiceOptimizedPlaybackState(to session: EnginePlaybackSession) {
-        session.voiceEqualizer.bypass = !voiceOptimizedPlaybackEnabled
-        session.voiceDynamics.bypass = !voiceOptimizedPlaybackEnabled
+    private func applyPlaybackProcessingMode(to session: EnginePlaybackSession) {
+        session.voiceEqualizer.bypass = !playbackProcessingMode.usesVoiceShaping
+        session.voiceMixer.outputVolume = playbackProcessingMode.usesVoiceShaping ? 1.12 : 1
     }
 
     private func schedule(_ session: EnginePlaybackSession, from frame: AVAudioFramePosition) throws {
@@ -608,10 +624,10 @@ final class AudioPlaybackManager: ObservableObject {
         session.node.stop()
         engine.disconnectNodeOutput(session.node)
         engine.disconnectNodeOutput(session.voiceEqualizer)
-        engine.disconnectNodeOutput(session.voiceDynamics)
+        engine.disconnectNodeOutput(session.voiceMixer)
         engine.detach(session.node)
         engine.detach(session.voiceEqualizer)
-        engine.detach(session.voiceDynamics)
+        engine.detach(session.voiceMixer)
 
         activeClipIDs.remove(clipID)
         pausedClipIDs.remove(clipID)
@@ -738,7 +754,7 @@ private final class EnginePlaybackSession {
     let clipID: UUID
     let node = AVAudioPlayerNode()
     let voiceEqualizer = AVAudioUnitEQ(numberOfBands: 4)
-    let voiceDynamics = AVAudioUnitDynamicsProcessor()
+    let voiceMixer = AVAudioMixerNode()
     let audioFile: AVAudioFile
     let url: URL
     let sampleRate: Double

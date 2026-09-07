@@ -112,7 +112,7 @@ struct InjectionControlPanel: View {
 
             InputVolumeControl()
 
-            VoiceOptimizedPlaybackToggle()
+            PlaybackProcessingModeControl()
 
             Text(diagnosticText)
                 .font(.footnote.weight(.medium))
@@ -153,30 +153,57 @@ struct InjectionControlPanel: View {
     }
 }
 
-private struct VoiceOptimizedPlaybackToggle: View {
+private struct PlaybackProcessingModeControl: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     var body: some View {
-        Toggle(isOn: $settingsStore.voiceOptimizedPlaybackEnabled) {
-            HStack(alignment: .top, spacing: 10) {
-                Image(systemName: "waveform.path.ecg")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(VmicTheme.blue)
-                    .frame(width: 24, height: 24)
+        HStack(alignment: .center, spacing: 10) {
+            Image(systemName: "waveform.path.ecg")
+                .font(.body.weight(.semibold))
+                .foregroundStyle(VmicTheme.blue)
+                .frame(width: 24, height: 24)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(settingsStore.text(.voiceOptimizedPlayback))
-                        .font(.footnote.weight(.semibold))
-                        .foregroundStyle(VmicTheme.ink)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(settingsStore.text(.playbackProcessing))
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
 
-                    Text(settingsStore.text(.voiceOptimizedPlaybackDetail))
-                        .font(.caption.weight(.medium))
-                        .foregroundStyle(VmicTheme.mutedInk)
-                        .fixedSize(horizontal: false, vertical: true)
+                Text(settingsStore.playbackProcessingDetail(settingsStore.playbackProcessingMode))
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 8)
+
+            Menu {
+                ForEach(PlaybackProcessingMode.allCases) { mode in
+                    Button {
+                        settingsStore.playbackProcessingMode = mode
+                    } label: {
+                        Label(
+                            settingsStore.playbackProcessingTitle(mode),
+                            systemImage: settingsStore.playbackProcessingMode == mode ? "checkmark" : "waveform"
+                        )
+                    }
                 }
+            } label: {
+                HStack(spacing: 5) {
+                    Text(settingsStore.playbackProcessingTitle(settingsStore.playbackProcessingMode))
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.78)
+
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption2.weight(.bold))
+                }
+                .foregroundStyle(VmicTheme.blue)
+                .padding(.horizontal, 9)
+                .frame(height: 30)
+                .background(VmicTheme.blue.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
             }
         }
-        .tint(VmicTheme.blue)
         .padding(12)
         .background(VmicTheme.cyan.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }

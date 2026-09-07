@@ -40,6 +40,16 @@ struct SettingsDrawer: View {
                     }
 
                     SettingsNavigationRow {
+                        PlaybackProcessingSettingsView()
+                    } label: {
+                        SettingsLinkRow(
+                            title: settingsStore.text(.playbackProcessing),
+                            detail: settingsStore.playbackProcessingTitle(settingsStore.playbackProcessingMode),
+                            systemImage: "waveform.path.ecg"
+                        )
+                    }
+
+                    SettingsNavigationRow {
                         ListSettingsView()
                     } label: {
                         SettingsLinkRow(
@@ -250,6 +260,60 @@ private struct PlaybackSettingsView: View {
         .scrollContentBackground(.hidden)
         .background(VmicTheme.drawerBackground)
         .navigationTitle(settingsStore.text(.playback))
+        .navigationBarTitleDisplayMode(.inline)
+        .vmicOpaqueNavigationBar()
+    }
+}
+
+private struct PlaybackProcessingSettingsView: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(PlaybackProcessingMode.allCases) { mode in
+                    Button {
+                        settingsStore.playbackProcessingMode = mode
+                    } label: {
+                        HStack(alignment: .top, spacing: 12) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(settingsStore.playbackProcessingTitle(mode))
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(VmicTheme.ink)
+
+                                Text(settingsStore.playbackProcessingDetail(mode))
+                                    .font(.caption)
+                                    .foregroundStyle(VmicTheme.mutedInk)
+                                    .fixedSize(horizontal: false, vertical: true)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            if settingsStore.playbackProcessingMode == mode {
+                                Image(systemName: "checkmark")
+                                    .font(.subheadline.weight(.semibold))
+                                    .foregroundStyle(VmicTheme.blue)
+                            }
+                        }
+                        .padding(.vertical, 3)
+                    }
+                }
+            }
+            .listRowBackground(Color.clear)
+
+            Section {
+                Text(settingsStore.text(.playbackProcessingDetail))
+                    .font(.footnote)
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.vertical, 4)
+            }
+            .listRowBackground(Color.clear)
+        }
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
+        .background(VmicTheme.drawerBackground)
+        .navigationTitle(settingsStore.text(.playbackProcessing))
         .navigationBarTitleDisplayMode(.inline)
         .vmicOpaqueNavigationBar()
     }

@@ -59,6 +59,24 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
     }
 }
 
+enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
+    case standard
+    case officialLike
+    case combinedVoice
+
+    var id: String {
+        rawValue
+    }
+
+    var usesExplicitAudioSession: Bool {
+        self != .officialLike
+    }
+
+    var usesVoiceShaping: Bool {
+        self == .combinedVoice
+    }
+}
+
 enum VmicText {
     case settings
     case theme
@@ -234,6 +252,14 @@ enum VmicText {
     case currentPlayback
     case inputVolume
     case inputVolumeDetail
+    case playbackProcessing
+    case playbackProcessingDetail
+    case playbackProcessingStandard
+    case playbackProcessingStandardDetail
+    case playbackProcessingOfficialLike
+    case playbackProcessingOfficialLikeDetail
+    case playbackProcessingCombined
+    case playbackProcessingCombinedDetail
     case voiceOptimizedPlayback
     case voiceOptimizedPlaybackDetail
     case volumePercent(Int)
@@ -317,9 +343,9 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
-    @Published var voiceOptimizedPlaybackEnabled: Bool {
+    @Published var playbackProcessingMode: PlaybackProcessingMode {
         didSet {
-            UserDefaults.standard.set(voiceOptimizedPlaybackEnabled, forKey: Self.voiceOptimizedPlaybackEnabledKey)
+            UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
         }
     }
 
@@ -349,7 +375,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitCountKey = "vmic.playbackLimitCount"
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
-    private static let voiceOptimizedPlaybackEnabledKey = "vmic.voiceOptimizedPlaybackEnabled"
+    private static let playbackProcessingModeKey = "vmic.playbackProcessingMode"
     private static let showDurationKey = "vmic.showDuration"
     private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
     private static let showFloatingDockInDebugKey = "vmic.showFloatingDockInDebug"
@@ -368,10 +394,33 @@ final class AppSettingsStore: ObservableObject {
         playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
-        voiceOptimizedPlaybackEnabled = UserDefaults.standard.object(forKey: Self.voiceOptimizedPlaybackEnabledKey) as? Bool ?? false
+        let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
+        playbackProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:)) ?? .combinedVoice
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
+    }
+
+    func playbackProcessingTitle(_ mode: PlaybackProcessingMode) -> String {
+        switch mode {
+        case .standard:
+            return text(.playbackProcessingStandard)
+        case .officialLike:
+            return text(.playbackProcessingOfficialLike)
+        case .combinedVoice:
+            return text(.playbackProcessingCombined)
+        }
+    }
+
+    func playbackProcessingDetail(_ mode: PlaybackProcessingMode) -> String {
+        switch mode {
+        case .standard:
+            return text(.playbackProcessingStandardDetail)
+        case .officialLike:
+            return text(.playbackProcessingOfficialLikeDetail)
+        case .combinedVoice:
+            return text(.playbackProcessingCombinedDetail)
+        }
     }
 
     func text(_ key: VmicText) -> String {
@@ -733,6 +782,22 @@ final class AppSettingsStore: ObservableObject {
             return "输入音量"
         case .inputVolumeDetail:
             return "控制音频文件播放并尝试加入通话时的音量；设为 0 会让文件音频静音。"
+        case .playbackProcessing:
+            return "处理方式"
+        case .playbackProcessingDetail:
+            return "决定文件播放时的音频会话和语音化处理策略。"
+        case .playbackProcessingStandard:
+            return "标准"
+        case .playbackProcessingStandardDetail:
+            return "沿用 main 分支的显式会话激活，声音保持原始。"
+        case .playbackProcessingOfficialLike:
+            return "官方式"
+        case .playbackProcessingOfficialLikeDetail:
+            return "只重申通话注入偏好，尽量贴近官方语音对照的时序。"
+        case .playbackProcessingCombined:
+            return "组合增强"
+        case .playbackProcessingCombinedDetail:
+            return "显式激活会话，并增强语音频段，适合对抗通话降噪。"
         case .voiceOptimizedPlayback:
             return "语音化处理"
         case .voiceOptimizedPlaybackDetail:
@@ -1148,6 +1213,22 @@ final class AppSettingsStore: ObservableObject {
             return "Input Volume"
         case .inputVolumeDetail:
             return "Controls audio file playback volume while vmic tries to add it to calls. Setting it to 0 mutes file audio."
+        case .playbackProcessing:
+            return "Processing"
+        case .playbackProcessingDetail:
+            return "Controls the audio session and voice shaping strategy used for file playback."
+        case .playbackProcessingStandard:
+            return "Standard"
+        case .playbackProcessingStandardDetail:
+            return "Uses the main-branch explicit session activation while keeping the sound unshaped."
+        case .playbackProcessingOfficialLike:
+            return "Official-Like"
+        case .playbackProcessingOfficialLikeDetail:
+            return "Only reapplies the call injection preference to stay close to the official speech probe timing."
+        case .playbackProcessingCombined:
+            return "Combined Boost"
+        case .playbackProcessingCombinedDetail:
+            return "Activates the spoken-audio session and boosts speech bands for call noise reduction."
         case .voiceOptimizedPlayback:
             return "Voice-Optimized Playback"
         case .voiceOptimizedPlaybackDetail:

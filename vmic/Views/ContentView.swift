@@ -119,11 +119,11 @@ struct ContentView: View {
                 DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
             }
             configurePlaybackFinishHandler()
-            playbackManager.setVoiceOptimizedPlaybackEnabled(settingsStore.voiceOptimizedPlaybackEnabled)
+            applyPlaybackProcessingMode(settingsStore.playbackProcessingMode)
             await injectionManager.refresh()
         }
-        .onChange(of: settingsStore.voiceOptimizedPlaybackEnabled) { _, newValue in
-            playbackManager.setVoiceOptimizedPlaybackEnabled(newValue)
+        .onChange(of: settingsStore.playbackProcessingMode) { _, newValue in
+            applyPlaybackProcessingMode(newValue)
         }
         .onChange(of: scenePhase) { _, newPhase in
             Task { @MainActor in
@@ -219,6 +219,28 @@ struct ContentView: View {
             artworkDirectory: libraryStore.artworkDirectory,
             playbackState: currentPlaybackState
         )
+    }
+
+    private func applyPlaybackProcessingMode(_ mode: PlaybackProcessingMode) {
+        playbackManager.setPlaybackProcessingMode(mode)
+        guard !playbackManager.activeClipIDs.isEmpty else { return }
+
+        do {
+            if mode.usesExplicitAudioSession {
+                try injectionManager.reapplyInjectionPreferenceIfNeeded()
+            } else {
+                try injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded()
+            }
+        } catch {
+            DiagnosticLogStore.shared.log(
+                "播放处理方式已切换，会话重申失败",
+                source: .playback,
+                details: [
+                    "mode=\(mode.rawValue)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
+        }
     }
 
     private func togglePlayback(_ clip: SoundClip) {
