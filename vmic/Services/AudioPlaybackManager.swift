@@ -23,7 +23,7 @@ final class AudioPlaybackManager: ObservableObject {
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
     private var outputVolume: Float = 1
-    private var playbackProcessingMode: PlaybackProcessingMode = .combinedVoice
+    private var playbackProcessingMode: PlaybackProcessingMode = .officialLike
     private var lastLoggedOutputVolume: Float?
     private var lastLoggedPlaybackProcessingMode: PlaybackProcessingMode?
     private var progressTimer: Timer?

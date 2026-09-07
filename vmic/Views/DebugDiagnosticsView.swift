@@ -71,6 +71,7 @@ struct DebugDiagnosticsView: View {
     @State private var didCopyDiagnostics = false
     @State private var didCopyLogs = false
     @State private var highlightedFocus: DebugFocusTarget?
+    @State private var isSearchPresented = false
     @State private var debugSearchText = ""
     @State private var debugSearchWorkItem: DispatchWorkItem?
 
@@ -204,6 +205,14 @@ struct DebugDiagnosticsView: View {
             }
             .scrollIndicators(.hidden)
             .background(VmicTheme.appBackground)
+            .simultaneousGesture(
+                TapGesture().onEnded {
+                    let query = debugSearchText.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if isSearchPresented && query.isEmpty {
+                        closeDebugSearch()
+                    }
+                }
+            )
             .onAppear {
                 appChromeStore.isDebugPageVisible = true
                 DiagnosticLogStore.shared.log(
@@ -218,22 +227,51 @@ struct DebugDiagnosticsView: View {
                 debugSearchWorkItem?.cancel()
             }
             .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    DebugSearchField(
-                        text: $debugSearchText,
-                        submit: {
-                            performDebugSearch(with: proxy)
+                if isSearchPresented {
+                    ToolbarItem(placement: .principal) {
+                        DebugSearchField(
+                            text: $debugSearchText,
+                            submit: {
+                                performDebugSearch(with: proxy)
+                            },
+                            close: closeDebugSearch
+                        )
+                    }
+                } else {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            openDebugSearch()
+                        } label: {
+                            Image(systemName: "magnifyingglass")
                         }
-                    )
+                        .buttonStyle(QuietIconButtonStyle())
+                        .accessibilityLabel(settingsStore.text(.debugSearchPlaceholder))
+                    }
                 }
             }
             .onChange(of: debugSearchText) { _, _ in
                 scheduleDebugSearch(with: proxy)
             }
         }
-        .navigationTitle(settingsStore.text(.debug))
+        .navigationTitle(isSearchPresented ? "" : settingsStore.text(.debug))
         .navigationBarTitleDisplayMode(.inline)
         .vmicOpaqueNavigationBar()
+    }
+
+    private func openDebugSearch() {
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSearchPresented = true
+        }
+    }
+
+    private func closeDebugSearch() {
+        debugSearchWorkItem?.cancel()
+        debugSearchText = ""
+        highlightedFocus = nil
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            isSearchPresented = false
+        }
     }
 
     private func scrollToInitialFocus(with proxy: ScrollViewProxy) {
@@ -328,6 +366,7 @@ struct DebugDiagnosticsView: View {
             (.playbackProcessing, [
                 settingsStore.text(.playbackProcessing),
                 settingsStore.text(.playbackProcessingDetail),
+                settingsStore.text(.playbackProcessingDebugNote),
                 settingsStore.playbackProcessingTitle(settingsStore.playbackProcessingMode),
                 settingsStore.playbackProcessingDetail(settingsStore.playbackProcessingMode),
                 settingsStore.text(.playbackProcessingStandard),
@@ -483,42 +522,52 @@ struct DebugDiagnosticsView: View {
 
 private struct DebugSearchField: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
+    @FocusState private var isFocused: Bool
 
     @Binding var text: String
     let submit: () -> Void
+    let close: () -> Void
+
+    private var fieldWidth: CGFloat {
+        max(176, min(UIScreen.main.bounds.width - 118, 292))
+    }
 
     var body: some View {
-        HStack(spacing: 6) {
+        HStack(spacing: 7) {
             Image(systemName: "magnifyingglass")
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(VmicTheme.mutedInk)
 
             TextField(settingsStore.text(.debugSearchPlaceholder), text: $text)
-                .font(.caption.weight(.medium))
+                .font(.subheadline.weight(.medium))
                 .foregroundStyle(VmicTheme.ink)
                 .textInputAutocapitalization(.never)
                 .disableAutocorrection(true)
                 .submitLabel(.search)
+                .focused($isFocused)
                 .onSubmit(submit)
 
             if !text.isEmpty {
-                Button {
-                    text = ""
-                } label: {
+                Button(action: close) {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.caption.weight(.semibold))
+                        .font(.subheadline.weight(.semibold))
                         .foregroundStyle(VmicTheme.mutedInk.opacity(0.78))
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel(settingsStore.text(.cancel))
             }
         }
-        .padding(.horizontal, 9)
-        .frame(width: 142, height: 32)
-        .background(VmicTheme.surface.opacity(0.92), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .padding(.horizontal, 10)
+        .frame(width: fieldWidth, height: 34)
+        .background(VmicTheme.surface.opacity(0.96), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.72), lineWidth: 1)
+        }
+        .onAppear {
+            DispatchQueue.main.async {
+                isFocused = true
+            }
         }
     }
 }
@@ -830,6 +879,11 @@ private struct DebugPlaybackProcessingCard: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            Text(settingsStore.text(.playbackProcessingDebugNote))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(VmicTheme.mutedInk.opacity(0.84))
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

@@ -302,7 +302,7 @@ private struct PlaybackProcessingSettingsView: View {
             .listRowBackground(Color.clear)
 
             Section {
-                Text(settingsStore.text(.playbackProcessingDetail))
+                Text(settingsStore.text(.playbackProcessingDebugNote))
                     .font(.footnote)
                     .foregroundStyle(VmicTheme.mutedInk)
                     .fixedSize(horizontal: false, vertical: true)

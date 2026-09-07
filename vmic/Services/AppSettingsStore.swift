@@ -60,8 +60,8 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
 }
 
 enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
-    case standard
     case officialLike
+    case standard
     case combinedVoice
 
     var id: String {
@@ -254,6 +254,7 @@ enum VmicText {
     case inputVolumeDetail
     case playbackProcessing
     case playbackProcessingDetail
+    case playbackProcessingDebugNote
     case playbackProcessingStandard
     case playbackProcessingStandardDetail
     case playbackProcessingOfficialLike
@@ -376,6 +377,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
     private static let playbackProcessingModeKey = "vmic.playbackProcessingMode"
+    private static let playbackProcessingDefaultMigrationKey = "vmic.playbackProcessingDefaultMigration.officialLike"
     private static let showDurationKey = "vmic.showDuration"
     private static let floatingWindowEnabledKey = "vmic.floatingWindowEnabled"
     private static let showFloatingDockInDebugKey = "vmic.showFloatingDockInDebug"
@@ -395,7 +397,15 @@ final class AppSettingsStore: ObservableObject {
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
         let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
-        playbackProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:)) ?? .combinedVoice
+        let savedProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:))
+        let hasMigratedProcessingDefault = UserDefaults.standard.object(forKey: Self.playbackProcessingDefaultMigrationKey) as? Bool ?? false
+        if hasMigratedProcessingDefault {
+            playbackProcessingMode = savedProcessingMode ?? .officialLike
+        } else {
+            playbackProcessingMode = savedProcessingMode == .combinedVoice ? .officialLike : savedProcessingMode ?? .officialLike
+            UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
+            UserDefaults.standard.set(true, forKey: Self.playbackProcessingDefaultMigrationKey)
+        }
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
@@ -786,6 +796,8 @@ final class AppSettingsStore: ObservableObject {
             return "处理方式"
         case .playbackProcessingDetail:
             return "决定文件播放时的音频会话和语音化处理策略。"
+        case .playbackProcessingDebugNote:
+            return "该模式目前处于调试中，实际效果会受到通话 App 降噪策略影响。"
         case .playbackProcessingStandard:
             return "标准"
         case .playbackProcessingStandardDetail:
@@ -1217,6 +1229,8 @@ final class AppSettingsStore: ObservableObject {
             return "Processing"
         case .playbackProcessingDetail:
             return "Controls the audio session and voice shaping strategy used for file playback."
+        case .playbackProcessingDebugNote:
+            return "This mode is still experimental; call-app noise reduction may change the result."
         case .playbackProcessingStandard:
             return "Standard"
         case .playbackProcessingStandardDetail:
