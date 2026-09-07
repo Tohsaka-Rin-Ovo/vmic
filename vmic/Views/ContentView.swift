@@ -99,7 +99,13 @@ struct ContentView: View {
                         playbackManager.stop(currentClip)
                     },
                     seekAction: { progress in
-                        playbackManager.seek(currentClip, toProgress: progress)
+                        playbackManager.seek(
+                            currentClip,
+                            toProgress: progress,
+                            reinforceAudioSession: {
+                                try injectionManager.reinforceInjectionAudioSession(reason: "seekPlayback")
+                            }
+                        )
                     }
                 )
                 .zIndex(20)
@@ -136,6 +142,7 @@ struct ContentView: View {
 
                 DiagnosticLogStore.shared.log("App 回到前台，刷新注入状态", source: .app)
                 await injectionManager.refresh()
+                reinforceActivePlaybackInjection(reason: "sceneActivePlayback")
             }
             syncFloatingWindow(for: newPhase)
         }
@@ -226,11 +233,7 @@ struct ContentView: View {
         guard !playbackManager.activeClipIDs.isEmpty else { return }
 
         do {
-            if mode.usesExplicitAudioSession {
-                try injectionManager.reapplyInjectionPreferenceIfNeeded()
-            } else {
-                try injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded()
-            }
+            try injectionManager.reinforceInjectionAudioSession(reason: "playbackProcessingModeChanged")
         } catch {
             DiagnosticLogStore.shared.log(
                 "播放处理方式已切换，会话重申失败",
@@ -252,7 +255,9 @@ struct ContentView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: {
+                try injectionManager.reinforceInjectionAudioSession(reason: "togglePlayback")
+            }
         )
     }
 
@@ -315,8 +320,30 @@ struct ContentView: View {
             playbackManager.play(
                 nextClip,
                 from: libraryStore.soundsDirectory,
-                reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded,
+                reapplyInjectionPreference: {
+                    try injectionManager.reinforceInjectionAudioSession(reason: "autoNextPlayback")
+                },
                 resetPlaybackSession: false
+            )
+        }
+    }
+
+    private func reinforceActivePlaybackInjection(reason: String) {
+        let hasPlayingAudio = playbackManager.activeClipIDs.contains {
+            playbackManager.playbackState(for: $0) == .playing
+        }
+        guard hasPlayingAudio else { return }
+
+        do {
+            try injectionManager.reinforceInjectionAudioSession(reason: reason)
+        } catch {
+            DiagnosticLogStore.shared.log(
+                "播放中补强注入会话失败",
+                source: .app,
+                details: [
+                    "reason=\(reason)",
+                    "error=\(error.localizedDescription)"
+                ]
             )
         }
     }

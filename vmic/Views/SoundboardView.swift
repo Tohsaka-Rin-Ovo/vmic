@@ -91,7 +91,9 @@ struct SoundboardView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: {
+                try injectionManager.reinforceInjectionAudioSession(reason: "soundboardPlayback")
+            }
         )
     }
 }
@@ -353,7 +355,9 @@ private struct AudioLibraryView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: {
+                try injectionManager.reinforceInjectionAudioSession(reason: "audioLibraryPlayback")
+            }
         )
     }
 }
@@ -1136,7 +1140,9 @@ struct PlaybackSessionSettingsView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: {
+                try injectionManager.reinforceInjectionAudioSession(reason: "playbackSettingsPlayback")
+            }
         )
     }
 }
@@ -1288,7 +1294,6 @@ private struct PlaybackProgressBar: View {
                         .onChanged { value in
                             let progress = dragProgress(for: value.location.x, width: proxy.size.width)
                             dragProgress = progress
-                            seekAction(progress)
                         }
                         .onEnded { value in
                             let progress = dragProgress(for: value.location.x, width: proxy.size.width)

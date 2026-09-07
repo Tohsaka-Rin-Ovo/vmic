@@ -1103,7 +1103,9 @@ private struct PlaybackSelfCheckCard: View {
                 selfCheckManager.playNormalPlayback(
                     clip,
                     from: soundsDirectory,
-                    reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+                    reapplyInjectionPreference: {
+                        try injectionManager.reinforceInjectionAudioSession(reason: "selfCheckNormalPlayback")
+                    }
                 )
             }
         }
@@ -1118,7 +1120,9 @@ private struct PlaybackSelfCheckCard: View {
                 selfCheckManager.playMutedPlayback(
                     clip,
                     from: soundsDirectory,
-                    reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+                    reapplyInjectionPreference: {
+                        try injectionManager.reinforceInjectionAudioSession(reason: "selfCheckMutedPlayback")
+                    }
                 )
             }
         }
@@ -1236,7 +1240,9 @@ private struct AudioFileProbeCard: View {
             playbackManager.play(
                 referenceClip,
                 from: soundsDirectory,
-                reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
+                reapplyInjectionPreference: {
+                    try injectionManager.reinforceInjectionAudioSession(reason: "referenceFilePlayback")
+                }
             )
 
             if playbackManager.playbackState(for: referenceClip.id) == nil {
@@ -2609,18 +2615,16 @@ private final class PlaybackSelfCheckManager: NSObject, ObservableObject {
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         DiagnosticLogStore.shared.log(
-            "播放链路自检配置官方式会话开始",
+            "播放链路自检配置注入会话开始",
             source: .playbackSelfCheck,
             details: Self.audioSessionDetails(session)
         )
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
-            "播放链路自检配置官方式会话完成",
+            "播放链路自检配置注入会话完成",
             source: .playbackSelfCheck,
             details: [
-                "policy=preferredInjectionOnly",
-                "categoryChangedByVmic=false",
-                "activeChangedByVmic=false"
+                "policy=reinforceIfNeeded"
             ] + Self.audioSessionDetails(session)
         )
     }

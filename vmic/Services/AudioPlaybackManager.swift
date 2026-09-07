@@ -66,11 +66,19 @@ final class AudioPlaybackManager: ObservableObject {
         playbackCompletionCountByClipID[clipID] ?? 0
     }
 
-    func seek(_ clip: SoundClip, toProgress progress: Double) {
-        seek(clipID: clip.id, toProgress: progress)
+    func seek(
+        _ clip: SoundClip,
+        toProgress progress: Double,
+        reinforceAudioSession: (@MainActor () throws -> Void)? = nil
+    ) {
+        seek(clipID: clip.id, toProgress: progress, reinforceAudioSession: reinforceAudioSession)
     }
 
-    func seek(clipID: UUID, toProgress progress: Double) {
+    func seek(
+        clipID: UUID,
+        toProgress progress: Double,
+        reinforceAudioSession: (@MainActor () throws -> Void)? = nil
+    ) {
         guard let session = sessionsByClipID[clipID], session.durationFrames > 0 else { return }
 
         let targetProgress = min(max(progress, 0), 1)
@@ -94,6 +102,28 @@ final class AudioPlaybackManager: ObservableObject {
             )
 
             if wasPlaying {
+                do {
+                    try reinforceAudioSession?()
+                    DiagnosticLogStore.shared.log(
+                        "调整播放进度后已补强注入会话",
+                        source: .playback,
+                        details: [
+                            "clipID=\(shortID(clipID))",
+                            "progress=\(formatPercent(targetProgress))"
+                        ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
+                    )
+                } catch {
+                    lastError = "已调整播放进度，但注入会话补强失败：\(error.localizedDescription)"
+                    DiagnosticLogStore.shared.log(
+                        "调整播放进度后补强注入会话失败",
+                        source: .playback,
+                        details: [
+                            "clipID=\(shortID(clipID))",
+                            "progress=\(formatPercent(targetProgress))",
+                            "error=\(error.localizedDescription)"
+                        ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
+                    )
+                }
                 startProgressTimerIfNeeded()
             }
         } catch {
@@ -473,16 +503,15 @@ final class AudioPlaybackManager: ObservableObject {
         }
 
         try reapplyInjectionPreference?()
-        let changedSession = playbackProcessingMode.usesExplicitAudioSession
-        let policy = changedSession ? "explicitSpokenAudio" : "preferredInjectionOnly"
+        let usesExplicitSession = playbackProcessingMode.usesExplicitAudioSession
+        let policy = usesExplicitSession ? "explicitSpokenAudio" : "reinforceIfNeeded"
         DiagnosticLogStore.shared.log(
             "文件播放会话配置完成",
             source: .playback,
             details: [
                 "mode=\(playbackProcessingMode.rawValue)",
                 "policy=\(policy)",
-                "categoryChangedByVmic=\(changedSession)",
-                "activeChangedByVmic=\(changedSession)"
+                "explicitSessionByPlaybackMode=\(usesExplicitSession)"
             ] + Self.audioSessionDetails(session)
         )
     }

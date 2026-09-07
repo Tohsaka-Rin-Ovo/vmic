@@ -119,7 +119,7 @@ struct AudioSessionDiagnostics: Equatable {
     }
 
     @available(iOS 18.2, *)
-    private static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
+    fileprivate static func microphoneInjectionModeDescription(_ mode: AVAudioSession.MicrophoneInjectionMode) -> String {
         switch mode {
         case .none:
             return "none"
@@ -439,7 +439,95 @@ final class MicrophoneInjectionManager: ObservableObject {
         }
     }
 
+    func reinforceInjectionAudioSession(reason: String) throws {
+        guard isInjectionEnabled else {
+            DiagnosticLogStore.shared.log(
+                "跳过补强注入会话：开关未开启",
+                source: .injection,
+                details: ["reason=\(reason)"]
+            )
+            return
+        }
+
+        guard #available(iOS 18.2, *) else {
+            refreshAudioSessionDiagnostics(printToConsole: true)
+            return
+        }
+
+        let session = AVAudioSession.sharedInstance()
+        let needsPreparation = session.category != .playback
+            || session.mode != .spokenAudio
+            || !session.categoryOptions.contains(.mixWithOthers)
+
+        DiagnosticLogStore.shared.log(
+            "补强注入音频会话开始",
+            source: .injection,
+            details: [
+                "reason=\(reason)",
+                "needsPreparation=\(needsPreparation)",
+                "categoryBefore=\(session.category.rawValue)",
+                "modeBefore=\(session.mode.rawValue)",
+                "optionsBefore=\(session.categoryOptions.rawValue)",
+                "preferredBefore=\(AudioSessionDiagnostics.microphoneInjectionModeDescription(session.preferredMicrophoneInjectionMode))",
+                "availableBefore=\(session.isMicrophoneInjectionAvailable)"
+            ]
+        )
+
+        do {
+            if needsPreparation {
+                try configureAppAudioSessionForInjection(reason: "reinforce:\(reason)")
+            }
+
+            try session.setPreferredMicrophoneInjectionMode(.spokenAudio)
+            lastInjectionModeChangeAt = Date()
+            lastError = nil
+            refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
+            _ = publishModeChangeResult(.enabled(channelAvailable: isInjectionAvailableInCurrentCall))
+            DiagnosticLogStore.shared.log(
+                "补强注入音频会话完成",
+                source: .injection,
+                details: [
+                    "reason=\(reason)",
+                    "prepared=\(needsPreparation)",
+                    "category=\(session.category.rawValue)",
+                    "mode=\(session.mode.rawValue)",
+                    "options=\(session.categoryOptions.rawValue)",
+                    "preferred=\(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")",
+                    "available=\(isInjectionAvailableInCurrentCall)"
+                ]
+            )
+        } catch {
+            lastInjectionModeChangeAt = Date()
+            lastError = error.localizedDescription
+            _ = publishModeChangeResult(.failed(message: error.localizedDescription))
+            DiagnosticLogStore.shared.log(
+                "补强注入音频会话失败",
+                source: .injection,
+                details: [
+                    "reason=\(reason)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
+            throw error
+        }
+    }
+
     private func prepareAppAudioSessionForInjection(reason: String) {
+        do {
+            try configureAppAudioSessionForInjection(reason: reason)
+        } catch {
+            DiagnosticLogStore.shared.log(
+                "通话注入音频会话准备失败，继续尝试注入偏好",
+                source: .injection,
+                details: [
+                    "reason=\(reason)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
+        }
+    }
+
+    private func configureAppAudioSessionForInjection(reason: String) throws {
         let session = AVAudioSession.sharedInstance()
         DiagnosticLogStore.shared.log(
             "准备通话注入音频会话",
@@ -452,30 +540,19 @@ final class MicrophoneInjectionManager: ObservableObject {
             ]
         )
 
-        do {
-            try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-            try session.setActive(true)
-            refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
-            DiagnosticLogStore.shared.log(
-                "通话注入音频会话已准备",
-                source: .injection,
-                details: [
-                    "reason=\(reason)",
-                    "category=\(session.category.rawValue)",
-                    "mode=\(session.mode.rawValue)",
-                    "options=\(session.categoryOptions.rawValue)"
-                ]
-            )
-        } catch {
-            DiagnosticLogStore.shared.log(
-                "通话注入音频会话准备失败，继续尝试注入偏好",
-                source: .injection,
-                details: [
-                    "reason=\(reason)",
-                    "error=\(error.localizedDescription)"
-                ]
-            )
-        }
+        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
+        try session.setActive(true)
+        refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
+        DiagnosticLogStore.shared.log(
+            "通话注入音频会话已准备",
+            source: .injection,
+            details: [
+                "reason=\(reason)",
+                "category=\(session.category.rawValue)",
+                "mode=\(session.mode.rawValue)",
+                "options=\(session.categoryOptions.rawValue)"
+            ]
+        )
     }
 
     func openAddAudioInCallsSettings() async {
