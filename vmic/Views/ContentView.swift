@@ -226,7 +226,7 @@ struct ContentView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
         )
     }
 
@@ -289,7 +289,7 @@ struct ContentView: View {
             playbackManager.play(
                 nextClip,
                 from: libraryStore.soundsDirectory,
-                reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded,
+                reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded,
                 resetPlaybackSession: false
             )
         }

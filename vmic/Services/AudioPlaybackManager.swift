@@ -193,6 +193,12 @@ final class AudioPlaybackManager: ObservableObject {
             try schedule(session, from: 0)
             try startEngineIfNeeded()
             session.node.play()
+            try reapplyInjectionPreference?()
+            DiagnosticLogStore.shared.log(
+                "AudioEngine 发声后已按官方式路径重申注入偏好",
+                source: .playback,
+                details: Self.audioSessionDetails(AVAudioSession.sharedInstance())
+            )
 
             guard session.node.isPlaying else {
                 throw AudioPlaybackError.playbackDidNotStart
@@ -275,6 +281,12 @@ final class AudioPlaybackManager: ObservableObject {
             session.node.volume = outputVolume
             session.pausedFrame = nil
             session.node.play()
+            try reapplyInjectionPreference?()
+            DiagnosticLogStore.shared.log(
+                "AudioEngine 恢复发声后已按官方式路径重申注入偏好",
+                source: .playback,
+                details: Self.audioSessionDetails(AVAudioSession.sharedInstance())
+            )
 
             guard session.node.isPlaying else {
                 throw AudioPlaybackError.playbackDidNotStart
@@ -406,27 +418,19 @@ final class AudioPlaybackManager: ObservableObject {
     private func configureAudioSession(reapplyInjectionPreference: (@MainActor () throws -> Void)?) throws {
         let session = AVAudioSession.sharedInstance()
         DiagnosticLogStore.shared.log(
-            "配置播放音频会话开始",
-            source: .playback,
-            details: Self.audioSessionDetails(session)
-        )
-        try session.setCategory(.playback, mode: .spokenAudio, options: [.mixWithOthers])
-        DiagnosticLogStore.shared.log(
-            "播放音频会话 setCategory 完成",
-            source: .playback,
-            details: Self.audioSessionDetails(session)
-        )
-        try session.setActive(true)
-        DiagnosticLogStore.shared.log(
-            "播放音频会话 setActive 完成",
+            "配置文件播放官方式会话开始",
             source: .playback,
             details: Self.audioSessionDetails(session)
         )
         try reapplyInjectionPreference?()
         DiagnosticLogStore.shared.log(
-            "播放音频会话配置完成",
+            "文件播放官方式会话配置完成",
             source: .playback,
-            details: Self.audioSessionDetails(session)
+            details: [
+                "policy=preferredInjectionOnly",
+                "categoryChangedByVmic=false",
+                "activeChangedByVmic=false"
+            ] + Self.audioSessionDetails(session)
         )
     }
 

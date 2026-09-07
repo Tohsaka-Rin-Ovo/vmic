@@ -87,7 +87,7 @@ struct SoundboardView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
         )
     }
 }
@@ -349,7 +349,7 @@ private struct AudioLibraryView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
         )
     }
 }
@@ -1132,7 +1132,7 @@ struct PlaybackSessionSettingsView: View {
             clip,
             from: libraryStore.soundsDirectory,
             volume: settingsStore.inputVolume,
-            reapplyInjectionPreference: injectionManager.reapplyInjectionPreferenceIfNeeded
+            reapplyInjectionPreference: injectionManager.reapplyOfficialSampleInjectionPreferenceIfNeeded
         )
     }
 }

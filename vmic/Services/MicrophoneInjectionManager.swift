@@ -330,9 +330,6 @@ final class MicrophoneInjectionManager: ObservableObject {
         pendingInjectionMode = enabled
 
         do {
-            if enabled {
-                prepareAppAudioSessionForInjection(reason: "enableInjection")
-            }
             try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(enabled ? .spokenAudio : .none)
             isInjectionEnabled = enabled
             lastInjectionModeChangeAt = Date()
@@ -394,6 +391,42 @@ final class MicrophoneInjectionManager: ObservableObject {
                 _ = publishModeChangeResult(.failed(message: error.localizedDescription))
                 DiagnosticLogStore.shared.log(
                     "重申注入偏好失败",
+                    source: .injection,
+                    details: ["error=\(error.localizedDescription)"]
+                )
+                throw error
+            }
+        }
+    }
+
+    func reapplyOfficialSampleInjectionPreferenceIfNeeded() throws {
+        guard isInjectionEnabled else {
+            DiagnosticLogStore.shared.log("跳过官方式重申注入偏好：开关未开启", source: .injection)
+            return
+        }
+
+        if #available(iOS 18.2, *) {
+            do {
+                DiagnosticLogStore.shared.log("官方式重申注入偏好开始", source: .injection)
+                try AVAudioSession.sharedInstance().setPreferredMicrophoneInjectionMode(.spokenAudio)
+                lastInjectionModeChangeAt = Date()
+                lastError = nil
+                refreshAudioSessionDiagnostics(printToConsole: true, updatesModeResult: false)
+                _ = publishModeChangeResult(.enabled(channelAvailable: isInjectionAvailableInCurrentCall))
+                DiagnosticLogStore.shared.log(
+                    "官方式重申注入偏好成功",
+                    source: .injection,
+                    details: [
+                        "available=\(isInjectionAvailableInCurrentCall)",
+                        "preferred=\(audioSessionDiagnostics.preferredMicrophoneInjectionMode ?? "unsupported")"
+                    ]
+                )
+            } catch {
+                lastInjectionModeChangeAt = Date()
+                lastError = error.localizedDescription
+                _ = publishModeChangeResult(.failed(message: error.localizedDescription))
+                DiagnosticLogStore.shared.log(
+                    "官方式重申注入偏好失败",
                     source: .injection,
                     details: ["error=\(error.localizedDescription)"]
                 )
