@@ -1297,9 +1297,9 @@ private final class AudioFileProbeManager: ObservableObject {
         let fileSize = (attributes[.size] as? NSNumber)?.int64Value ?? 0
         let asset = AVURLAsset(url: url)
         let tracks = asset.tracks(withMediaType: .audio)
-        let codecs = codecs(from: tracks)
-        let assetDuration = validDuration(CMTimeGetSeconds(asset.duration))
+        let assetDuration = validDuration(asset.duration.seconds)
         let audioFile = try AVAudioFile(forReading: url)
+        let codecs = codecHints(from: url, fileFormat: audioFile.fileFormat)
         let decodedFormat = formatDescription(audioFile.processingFormat)
         let decodedDuration = duration(frameCount: audioFile.length, sampleRate: audioFile.processingFormat.sampleRate)
         let levels = try? measureLevels(in: audioFile)
@@ -1404,18 +1404,24 @@ private final class AudioFileProbeManager: ObservableObject {
         return warnings
     }
 
-    private func codecs(from tracks: [AVAssetTrack]) -> [String] {
-        let values = tracks
-            .flatMap(\.formatDescriptions)
-            .compactMap { $0 as? CMFormatDescription }
-            .map { fourCCString(CMFormatDescriptionGetMediaSubType($0)) }
-
-        return Array(Set(values)).sorted()
-    }
-
     private func formatDescription(_ format: AVAudioFormat) -> String {
         let layout = format.isInterleaved ? "interleaved" : "non-interleaved"
         return "\(Int(format.sampleRate.rounded())) Hz / \(format.channelCount) ch / \(commonFormatDescription(format.commonFormat)) / \(layout)"
+    }
+
+    private func codecHints(from url: URL, fileFormat: AVAudioFormat) -> [String] {
+        var values: [String] = []
+
+        let fileExtension = url.pathExtension.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !fileExtension.isEmpty {
+            values.append(fileExtension.uppercased())
+        }
+
+        if let formatID = (fileFormat.settings[AVFormatIDKey] as? NSNumber)?.uint32Value {
+            values.append(audioFormatIDDescription(formatID))
+        }
+
+        return Array(Set(values)).sorted()
     }
 
     private func commonFormatDescription(_ format: AVAudioCommonFormat) -> String {
@@ -1445,7 +1451,7 @@ private final class AudioFileProbeManager: ObservableObject {
         return seconds
     }
 
-    private func fourCCString(_ value: FourCharCode) -> String {
+    private func audioFormatIDDescription(_ value: UInt32) -> String {
         let bytes: [UInt8] = [
             UInt8((value >> 24) & 0xff),
             UInt8((value >> 16) & 0xff),
@@ -1454,7 +1460,7 @@ private final class AudioFileProbeManager: ObservableObject {
         ]
         let text = String(bytes: bytes, encoding: .macOSRoman) ?? "\(value)"
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? "\(value)" : trimmed
+        return trimmed.isEmpty ? "formatID:\(value)" : trimmed
     }
 }
 
