@@ -63,13 +63,9 @@ struct SoundboardView: View {
         }
         .task {
             playbackManager.setOutputVolume(settingsStore.inputVolume)
-            playbackManager.setPlaybackProcessingMode(settingsStore.playbackProcessingMode)
         }
         .onChange(of: settingsStore.inputVolume) { _, newValue in
             playbackManager.setOutputVolume(newValue)
-        }
-        .onChange(of: settingsStore.playbackProcessingMode) { _, newValue in
-            playbackManager.setPlaybackProcessingMode(newValue)
         }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)

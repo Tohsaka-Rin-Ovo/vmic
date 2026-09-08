@@ -402,8 +402,11 @@ final class AppSettingsStore: ObservableObject {
         if hasMigratedProcessingDefault {
             playbackProcessingMode = savedProcessingMode ?? .officialLike
         } else {
-            playbackProcessingMode = savedProcessingMode == .combinedVoice ? .officialLike : savedProcessingMode ?? .officialLike
-            UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
+            let migratedProcessingMode = savedProcessingMode == .combinedVoice
+                ? PlaybackProcessingMode.officialLike
+                : savedProcessingMode ?? .officialLike
+            playbackProcessingMode = migratedProcessingMode
+            UserDefaults.standard.set(migratedProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
             UserDefaults.standard.set(true, forKey: Self.playbackProcessingDefaultMigrationKey)
         }
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
