@@ -373,6 +373,8 @@ struct DebugDiagnosticsView: View {
                 settingsStore.text(.playbackProcessingStandardDetail),
                 settingsStore.text(.playbackProcessingOfficialLike),
                 settingsStore.text(.playbackProcessingOfficialLikeDetail),
+                settingsStore.text(.playbackProcessingAINoiseReduction),
+                settingsStore.text(.playbackProcessingAINoiseReductionDetail),
                 settingsStore.text(.playbackProcessingCombined),
                 settingsStore.text(.playbackProcessingCombinedDetail)
             ]),

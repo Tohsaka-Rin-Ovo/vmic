@@ -61,6 +61,7 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
 
 enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     case officialLike
+    case aiNoiseReduction
     case standard
     case combinedVoice
 
@@ -73,7 +74,11 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     }
 
     var usesVoiceShaping: Bool {
-        self == .combinedVoice
+        self == .aiNoiseReduction || self == .combinedVoice
+    }
+
+    var usesNoiseReductionAdaptation: Bool {
+        self == .aiNoiseReduction
     }
 }
 
@@ -259,6 +264,8 @@ enum VmicText {
     case playbackProcessingStandardDetail
     case playbackProcessingOfficialLike
     case playbackProcessingOfficialLikeDetail
+    case playbackProcessingAINoiseReduction
+    case playbackProcessingAINoiseReductionDetail
     case playbackProcessingCombined
     case playbackProcessingCombinedDetail
     case voiceOptimizedPlayback
@@ -420,6 +427,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingStandard)
         case .officialLike:
             return text(.playbackProcessingOfficialLike)
+        case .aiNoiseReduction:
+            return text(.playbackProcessingAINoiseReduction)
         case .combinedVoice:
             return text(.playbackProcessingCombined)
         }
@@ -431,6 +440,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingStandardDetail)
         case .officialLike:
             return text(.playbackProcessingOfficialLikeDetail)
+        case .aiNoiseReduction:
+            return text(.playbackProcessingAINoiseReductionDetail)
         case .combinedVoice:
             return text(.playbackProcessingCombinedDetail)
         }
@@ -809,10 +820,14 @@ final class AppSettingsStore: ObservableObject {
             return "官方式"
         case .playbackProcessingOfficialLikeDetail:
             return "只重申通话注入偏好，尽量贴近官方语音对照的时序。"
+        case .playbackProcessingAINoiseReduction:
+            return "AI 降噪适配"
+        case .playbackProcessingAINoiseReductionDetail:
+            return "收窄音乐频段并增强人声清晰区，适合 KOOK 等通话降噪较强的场景。"
         case .playbackProcessingCombined:
             return "组合增强"
         case .playbackProcessingCombinedDetail:
-            return "显式激活会话，并增强语音频段，适合对抗通话降噪。"
+            return "显式激活会话，并轻度增强语音频段，适合和其他模式对照测试。"
         case .voiceOptimizedPlayback:
             return "语音化处理"
         case .voiceOptimizedPlaybackDetail:
@@ -1242,10 +1257,14 @@ final class AppSettingsStore: ObservableObject {
             return "Official-Like"
         case .playbackProcessingOfficialLikeDetail:
             return "Only reapplies the call injection preference to stay close to the official speech probe timing."
+        case .playbackProcessingAINoiseReduction:
+            return "AI Noise Fit"
+        case .playbackProcessingAINoiseReductionDetail:
+            return "Narrows music-like content and boosts speech clarity bands for call apps with aggressive noise reduction."
         case .playbackProcessingCombined:
             return "Combined Boost"
         case .playbackProcessingCombinedDetail:
-            return "Activates the spoken-audio session and boosts speech bands for call noise reduction."
+            return "Activates the spoken-audio session and lightly boosts speech bands for comparison testing."
         case .voiceOptimizedPlayback:
             return "Voice-Optimized Playback"
         case .voiceOptimizedPlaybackDetail:

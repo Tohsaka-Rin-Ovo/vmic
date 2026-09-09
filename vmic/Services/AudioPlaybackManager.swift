@@ -175,6 +175,7 @@ final class AudioPlaybackManager: ObservableObject {
                 "mode=\(mode.rawValue)",
                 "explicitSession=\(mode.usesExplicitAudioSession)",
                 "voiceShaping=\(mode.usesVoiceShaping)",
+                "noiseReductionAdaptation=\(mode.usesNoiseReductionAdaptation)",
                 "activePlayers=\(sessionsByClipID.count)",
                 "engineRunning=\(engine.isRunning)"
             ]
@@ -288,6 +289,7 @@ final class AudioPlaybackManager: ObservableObject {
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
+                    "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -368,6 +370,7 @@ final class AudioPlaybackManager: ObservableObject {
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
+                    "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
             )
@@ -533,46 +536,109 @@ final class AudioPlaybackManager: ObservableObject {
     }
 
     private func configurePlaybackProcessing(for session: EnginePlaybackSession) {
-        let bands = session.voiceEqualizer.bands
-
-        if bands.indices.contains(0) {
-            bands[0].filterType = .highPass
-            bands[0].frequency = 120
-            bands[0].bandwidth = 0.5
-            bands[0].gain = 0
-            bands[0].bypass = false
-        }
-
-        if bands.indices.contains(1) {
-            bands[1].filterType = .parametric
-            bands[1].frequency = 1_900
-            bands[1].bandwidth = 1.2
-            bands[1].gain = 4.5
-            bands[1].bypass = false
-        }
-
-        if bands.indices.contains(2) {
-            bands[2].filterType = .parametric
-            bands[2].frequency = 3_800
-            bands[2].bandwidth = 1.0
-            bands[2].gain = 3.0
-            bands[2].bypass = false
-        }
-
-        if bands.indices.contains(3) {
-            bands[3].filterType = .lowPass
-            bands[3].frequency = 8_200
-            bands[3].bandwidth = 0.5
-            bands[3].gain = 0
-            bands[3].bypass = false
-        }
-
         applyPlaybackProcessingMode(to: session)
     }
 
     private func applyPlaybackProcessingMode(to session: EnginePlaybackSession) {
-        session.voiceEqualizer.bypass = !playbackProcessingMode.usesVoiceShaping
-        session.voiceMixer.outputVolume = playbackProcessingMode.usesVoiceShaping ? 1.12 : 1
+        switch playbackProcessingMode {
+        case .aiNoiseReduction:
+            applyEqualizerPreset(
+                to: session,
+                highPass: 180,
+                lowPass: 7_200,
+                presenceFrequency: 1_650,
+                presenceGain: 5.8,
+                clarityFrequency: 3_200,
+                clarityGain: 4.8,
+                globalGain: 1.5,
+                outputVolume: 1.0
+            )
+        case .combinedVoice:
+            applyEqualizerPreset(
+                to: session,
+                highPass: 120,
+                lowPass: 8_200,
+                presenceFrequency: 1_900,
+                presenceGain: 4.5,
+                clarityFrequency: 3_800,
+                clarityGain: 3.0,
+                globalGain: 0.6,
+                outputVolume: 1.0
+            )
+        case .officialLike, .standard:
+            session.voiceEqualizer.bypass = true
+            session.voiceEqualizer.globalGain = 0
+            session.voiceMixer.outputVolume = 1
+        }
+    }
+
+    private func applyEqualizerPreset(
+        to session: EnginePlaybackSession,
+        highPass: Float,
+        lowPass: Float,
+        presenceFrequency: Float,
+        presenceGain: Float,
+        clarityFrequency: Float,
+        clarityGain: Float,
+        globalGain: Float,
+        outputVolume: Float
+    ) {
+        let bands = session.voiceEqualizer.bands
+
+        configureBand(
+            bands,
+            index: 0,
+            filterType: .highPass,
+            frequency: highPass,
+            bandwidth: 0.5,
+            gain: 0
+        )
+        configureBand(
+            bands,
+            index: 1,
+            filterType: .parametric,
+            frequency: presenceFrequency,
+            bandwidth: 1.0,
+            gain: presenceGain
+        )
+        configureBand(
+            bands,
+            index: 2,
+            filterType: .parametric,
+            frequency: clarityFrequency,
+            bandwidth: 0.9,
+            gain: clarityGain
+        )
+        configureBand(
+            bands,
+            index: 3,
+            filterType: .lowPass,
+            frequency: lowPass,
+            bandwidth: 0.5,
+            gain: 0
+        )
+
+        session.voiceEqualizer.bypass = false
+        session.voiceEqualizer.globalGain = globalGain
+        session.voiceMixer.outputVolume = outputVolume
+    }
+
+    private func configureBand(
+        _ bands: [AVAudioUnitEQFilterParameters],
+        index: Int,
+        filterType: AVAudioUnitEQFilterType,
+        frequency: Float,
+        bandwidth: Float,
+        gain: Float
+    ) {
+        guard bands.indices.contains(index) else { return }
+
+        let band = bands[index]
+        band.filterType = filterType
+        band.frequency = frequency
+        band.bandwidth = bandwidth
+        band.gain = gain
+        band.bypass = false
     }
 
     private func schedule(_ session: EnginePlaybackSession, from frame: AVAudioFramePosition) throws {
