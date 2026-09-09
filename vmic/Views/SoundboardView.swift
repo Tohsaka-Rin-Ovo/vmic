@@ -689,8 +689,12 @@ struct BottomNowPlayingBar: View {
     @State private var compactDragLivePosition: CGPoint?
     @State private var compactDragDidMove = false
     @State private var isDraggingDock = false
-    @State private var shouldSpinCover = false
+    @State private var coverRotationDegrees: Double = 0
+    @State private var coverSpinStartedAt: Date?
+    @State private var coverSpinClipID: UUID?
     @State private var dockContainerSize = CGSize(width: UIScreen.main.bounds.width - 32, height: 128)
+
+    private let coverSpinDuration: TimeInterval = 18
 
     private var isPlaying: Bool {
         playbackState == .playing
@@ -722,16 +726,20 @@ struct BottomNowPlayingBar: View {
         }
         .animation(.easeInOut(duration: 0.2), value: appChromeStore.floatingDockPresentation)
         .onAppear {
-            refreshCoverSpin()
+            syncCoverSpin()
         }
         .onChange(of: isPlaying) { _, _ in
-            refreshCoverSpin()
+            syncCoverSpin()
         }
         .onChange(of: isCompact) { _, _ in
             isDraggingDock = false
             compactDragStartPosition = nil
             compactDragLivePosition = nil
-            refreshCoverSpin()
+            syncCoverSpin()
+        }
+        .onChange(of: clip.id) { _, _ in
+            resetCoverSpin()
+            syncCoverSpin()
         }
     }
 
@@ -837,15 +845,11 @@ struct BottomNowPlayingBar: View {
 
     private var compactPlaybackBubble: some View {
         ZStack {
-            CoverArtworkView(artworkURL: clip.artworkURL(in: artworkDirectory), size: 76)
-                .clipShape(Circle())
-                .rotationEffect(.degrees(shouldSpinCover ? 360 : 0))
-                .animation(
-                    shouldSpinCover
-                        ? Animation.linear(duration: 18).repeatForever(autoreverses: false)
-                        : Animation.easeOut(duration: 0.12),
-                    value: shouldSpinCover
-                )
+            TimelineView(.animation) { context in
+                CoverArtworkView(artworkURL: clip.artworkURL(in: artworkDirectory), size: 76)
+                    .clipShape(Circle())
+                    .rotationEffect(.degrees(currentCoverRotation(at: context.date)))
+            }
 
             Circle()
                 .fill(Color.black.opacity(0.16))
@@ -994,15 +998,50 @@ struct BottomNowPlayingBar: View {
         return CGSize(width: min(availableWidth, 390), height: 108)
     }
 
-    private func refreshCoverSpin() {
-        shouldSpinCover = false
-
-        guard isCompact, isPlaying else { return }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            guard isCompact, isPlaying else { return }
-            shouldSpinCover = true
+    private func syncCoverSpin() {
+        if coverSpinClipID != clip.id {
+            resetCoverSpin()
         }
+
+        guard isCompact, isPlaying else {
+            freezeCoverSpin()
+            return
+        }
+
+        if coverSpinStartedAt == nil {
+            coverSpinStartedAt = Date()
+            coverSpinClipID = clip.id
+        }
+    }
+
+    private func freezeCoverSpin() {
+        guard let coverSpinStartedAt else { return }
+
+        coverRotationDegrees = normalizedCoverRotation(
+            coverRotationDegrees + Date().timeIntervalSince(coverSpinStartedAt) / coverSpinDuration * 360
+        )
+        self.coverSpinStartedAt = nil
+    }
+
+    private func resetCoverSpin() {
+        coverRotationDegrees = 0
+        coverSpinStartedAt = nil
+        coverSpinClipID = clip.id
+    }
+
+    private func currentCoverRotation(at date: Date) -> Double {
+        guard isCompact, isPlaying, let coverSpinStartedAt else {
+            return coverRotationDegrees
+        }
+
+        return normalizedCoverRotation(
+            coverRotationDegrees + date.timeIntervalSince(coverSpinStartedAt) / coverSpinDuration * 360
+        )
+    }
+
+    private func normalizedCoverRotation(_ degrees: Double) -> Double {
+        let normalized = degrees.truncatingRemainder(dividingBy: 360)
+        return normalized >= 0 ? normalized : normalized + 360
     }
 }
 
