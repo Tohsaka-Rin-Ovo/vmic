@@ -61,12 +61,6 @@ struct SoundboardView: View {
             .listStyle(.plain)
             .scrollContentBackground(.hidden)
         }
-        .task {
-            playbackManager.setOutputVolume(settingsStore.inputVolume)
-        }
-        .onChange(of: settingsStore.inputVolume) { _, newValue in
-            playbackManager.setOutputVolume(newValue)
-        }
         .navigationTitle("vmic")
         .navigationBarTitleDisplayMode(.inline)
         .vmicOpaqueNavigationBar()
@@ -1097,6 +1091,10 @@ struct PlaybackSessionSettingsView: View {
                         }
                     }
 
+                    PlaybackSettingsPanel(title: settingsStore.text(.volumeControl)) {
+                        PlaybackSessionVolumeControls()
+                    }
+
                     PlaybackSettingsPanel(title: settingsStore.text(.playbackMode)) {
                         Picker(settingsStore.text(.playbackMode), selection: $settingsStore.playbackMode) {
                             ForEach(PlaybackMode.allCases) { mode in
@@ -1205,6 +1203,61 @@ private struct PlaybackSettingsPanel<Content: View>: View {
         .overlay {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .stroke(Color.white.opacity(0.62), lineWidth: 1)
+        }
+    }
+}
+
+private struct PlaybackSessionVolumeControls: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PlaybackSessionVolumeSlider(
+                title: settingsStore.text(.inputVolume),
+                systemImage: "waveform",
+                value: $settingsStore.inputVolume
+            )
+
+            Divider()
+
+            PlaybackSessionVolumeSlider(
+                title: settingsStore.text(.monitorVolume),
+                systemImage: "speaker.wave.2",
+                value: $settingsStore.monitorVolume
+            )
+
+            Text(settingsStore.text(.separatedVolumeNote))
+                .font(.caption)
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct PlaybackSessionVolumeSlider: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let title: String
+    let systemImage: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.footnote.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((value * 100).rounded()))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $value, in: 0...1)
+                .tint(VmicTheme.blue)
         }
     }
 }

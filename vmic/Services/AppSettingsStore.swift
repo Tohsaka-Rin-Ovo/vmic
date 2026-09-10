@@ -62,11 +62,20 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
 enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     case officialLike
     case aiNoiseReduction
+    case dualPlayback
     case standard
     case combinedVoice
 
     var id: String {
         rawValue
+    }
+
+    static var userSelectableCases: [PlaybackProcessingMode] {
+        [.officialLike, .aiNoiseReduction, .standard, .combinedVoice]
+    }
+
+    static var debugCases: [PlaybackProcessingMode] {
+        allCases
     }
 
     var usesExplicitAudioSession: Bool {
@@ -79,6 +88,10 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
 
     var usesNoiseReductionAdaptation: Bool {
         self == .aiNoiseReduction
+    }
+
+    var usesDualPlaybackChain: Bool {
+        self == .dualPlayback
     }
 }
 
@@ -255,8 +268,12 @@ enum VmicText {
     case compactPlayer
     case expandPlayer
     case currentPlayback
+    case volumeControl
     case inputVolume
     case inputVolumeDetail
+    case monitorVolume
+    case monitorVolumeDetail
+    case separatedVolumeNote
     case playbackProcessing
     case playbackProcessingDetail
     case playbackProcessingDebugNote
@@ -266,6 +283,9 @@ enum VmicText {
     case playbackProcessingOfficialLikeDetail
     case playbackProcessingAINoiseReduction
     case playbackProcessingAINoiseReductionDetail
+    case playbackProcessingDualPlayback
+    case playbackProcessingDualPlaybackDetail
+    case playbackProcessingDualPlaybackVerifiedNote
     case playbackProcessingCombined
     case playbackProcessingCombinedDetail
     case voiceOptimizedPlayback
@@ -351,6 +371,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var monitorVolume: Double {
+        didSet {
+            UserDefaults.standard.set(monitorVolume, forKey: Self.monitorVolumeKey)
+        }
+    }
+
     @Published var playbackProcessingMode: PlaybackProcessingMode {
         didSet {
             UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
@@ -383,6 +409,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitCountKey = "vmic.playbackLimitCount"
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
+    private static let monitorVolumeKey = "vmic.monitorVolume"
     private static let playbackProcessingModeKey = "vmic.playbackProcessingMode"
     private static let playbackProcessingDefaultMigrationKey = "vmic.playbackProcessingDefaultMigration.officialLike"
     private static let showDurationKey = "vmic.showDuration"
@@ -403,6 +430,8 @@ final class AppSettingsStore: ObservableObject {
         playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
+        let savedMonitorVolume = UserDefaults.standard.object(forKey: Self.monitorVolumeKey) as? Double ?? 1
+        monitorVolume = min(max(savedMonitorVolume, 0), 1)
         let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
         let savedProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:))
         let hasMigratedProcessingDefault = UserDefaults.standard.object(forKey: Self.playbackProcessingDefaultMigrationKey) as? Bool ?? false
@@ -429,6 +458,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingOfficialLike)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReduction)
+        case .dualPlayback:
+            return text(.playbackProcessingDualPlayback)
         case .combinedVoice:
             return text(.playbackProcessingCombined)
         }
@@ -442,6 +473,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingOfficialLikeDetail)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReductionDetail)
+        case .dualPlayback:
+            return text(.playbackProcessingDualPlaybackDetail)
         case .combinedVoice:
             return text(.playbackProcessingCombinedDetail)
         }
@@ -802,10 +835,18 @@ final class AppSettingsStore: ObservableObject {
             return "展开播放"
         case .currentPlayback:
             return "播放中"
+        case .volumeControl:
+            return "音量"
         case .inputVolume:
-            return "输入音量"
+            return "注入音量"
         case .inputVolumeDetail:
-            return "控制音频文件播放并尝试加入通话时的音量；设为 0 会让文件音频静音。"
+            return "控制文件音频进入通话注入链路前的音量。"
+        case .monitorVolume:
+            return "本机监听"
+        case .monitorVolumeDetail:
+            return "控制手机扬声器或耳机侧的播放音量，设为 0 可用于验证远端是否仍能听到。"
+        case .separatedVolumeNote:
+            return "本机监听是否影响远端，取决于 iOS 实际取流位置。双链路实验会让监听滑块只控制副链路，建议在通话中对比确认。"
         case .playbackProcessing:
             return "处理方式"
         case .playbackProcessingDetail:
@@ -824,6 +865,12 @@ final class AppSettingsStore: ObservableObject {
             return "AI 降噪适配"
         case .playbackProcessingAINoiseReductionDetail:
             return "收窄音乐频段并增强人声清晰区，适合 KOOK 等通话降噪较强的场景。"
+        case .playbackProcessingDualPlayback:
+            return "双链路实验"
+        case .playbackProcessingDualPlaybackDetail:
+            return "同时启动注入主链路和监听副链路，仅保留在调试页用于复现实验结论。"
+        case .playbackProcessingDualPlaybackVerifiedNote:
+            return "已验证：双链路可以让远端听到主链路，但本机仍会听到主链路，不能实现“远端正常，本机监听=0”。"
         case .playbackProcessingCombined:
             return "组合增强"
         case .playbackProcessingCombinedDetail:
@@ -1239,10 +1286,18 @@ final class AppSettingsStore: ObservableObject {
             return "Expand Player"
         case .currentPlayback:
             return "Playing"
+        case .volumeControl:
+            return "Volume"
         case .inputVolume:
-            return "Input Volume"
+            return "Injection Volume"
         case .inputVolumeDetail:
-            return "Controls audio file playback volume while vmic tries to add it to calls. Setting it to 0 mutes file audio."
+            return "Controls file audio before it enters the call injection path."
+        case .monitorVolume:
+            return "Local Monitor"
+        case .monitorVolumeDetail:
+            return "Controls playback volume on this iPhone's speaker or headphones. Set it to 0 to check whether the remote side still hears audio."
+        case .separatedVolumeNote:
+            return "Whether local monitoring affects remote audio depends on where iOS captures the injected stream. The dual-chain experiment lets the monitor slider control only the secondary path for call testing."
         case .playbackProcessing:
             return "Processing"
         case .playbackProcessingDetail:
@@ -1261,6 +1316,12 @@ final class AppSettingsStore: ObservableObject {
             return "AI Noise Fit"
         case .playbackProcessingAINoiseReductionDetail:
             return "Narrows music-like content and boosts speech clarity bands for call apps with aggressive noise reduction."
+        case .playbackProcessingDualPlayback:
+            return "Dual Chain"
+        case .playbackProcessingDualPlaybackDetail:
+            return "Runs an injection path and a local monitor path together, kept only on the debug page for reproducing the experiment result."
+        case .playbackProcessingDualPlaybackVerifiedNote:
+            return "Verified: the remote side can hear the main path, but this iPhone still hears it too. It cannot achieve remote audio with local monitoring at 0."
         case .playbackProcessingCombined:
             return "Combined Boost"
         case .playbackProcessingCombinedDetail:

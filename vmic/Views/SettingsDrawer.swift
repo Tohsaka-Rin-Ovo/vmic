@@ -271,7 +271,7 @@ private struct PlaybackProcessingSettingsView: View {
     var body: some View {
         List {
             Section {
-                ForEach(PlaybackProcessingMode.allCases) { mode in
+                ForEach(PlaybackProcessingMode.userSelectableCases) { mode in
                     Button {
                         settingsStore.playbackProcessingMode = mode
                     } label: {
@@ -482,29 +482,63 @@ private struct SettingsVolumeRow: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text(settingsStore.text(.inputVolume))
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(VmicTheme.ink)
+        VStack(alignment: .leading, spacing: 14) {
+            SettingsVolumeSlider(
+                title: settingsStore.text(.inputVolume),
+                detail: settingsStore.text(.inputVolumeDetail),
+                systemImage: "waveform",
+                value: $settingsStore.inputVolume
+            )
 
-                Spacer()
+            Divider()
 
-                Text(settingsStore.text(.volumePercent(Int((settingsStore.inputVolume * 100).rounded()))))
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(VmicTheme.mutedInk)
-                    .monospacedDigit()
-            }
+            SettingsVolumeSlider(
+                title: settingsStore.text(.monitorVolume),
+                detail: settingsStore.text(.monitorVolumeDetail),
+                systemImage: "speaker.wave.2",
+                value: $settingsStore.monitorVolume
+            )
 
-            Slider(value: $settingsStore.inputVolume, in: 0...1)
-                .tint(VmicTheme.blue)
-
-            Text(settingsStore.text(.inputVolumeDetail))
+            Text(settingsStore.text(.separatedVolumeNote))
                 .font(.caption)
                 .foregroundStyle(VmicTheme.mutedInk)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(.vertical, 5)
+    }
+}
+
+private struct SettingsVolumeSlider: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let title: String
+    let detail: String
+    let systemImage: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((value * 100).rounded()))))
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $value, in: 0...1)
+                .tint(VmicTheme.blue)
+
+            Text(detail)
+                .font(.caption)
+                .foregroundStyle(VmicTheme.mutedInk)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 }
 
