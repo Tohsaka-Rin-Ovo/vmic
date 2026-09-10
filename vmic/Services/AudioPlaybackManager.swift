@@ -22,9 +22,11 @@ final class AudioPlaybackManager: ObservableObject {
     private var sessionsByClipID: [UUID: EnginePlaybackSession] = [:]
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
-    private var outputVolume: Float = 1
+    private var injectionVolume: Float = 1
+    private var monitorVolume: Float = 1
     private var playbackProcessingMode: PlaybackProcessingMode = .officialLike
-    private var lastLoggedOutputVolume: Float?
+    private var lastLoggedInjectionVolume: Float?
+    private var lastLoggedMonitorVolume: Float?
     private var lastLoggedPlaybackProcessingMode: PlaybackProcessingMode?
     private var progressTimer: Timer?
 
@@ -140,21 +142,46 @@ final class AudioPlaybackManager: ObservableObject {
     }
 
     func setOutputVolume(_ volume: Double) {
-        outputVolume = Float(min(max(volume, 0), 1))
+        setInjectionVolume(volume)
+    }
+
+    func setInjectionVolume(_ volume: Double) {
+        injectionVolume = Float(min(max(volume, 0), 1))
         sessionsByClipID.values.forEach { session in
-            session.node.volume = outputVolume
+            session.node.volume = injectionVolume
         }
 
-        let shouldLog = lastLoggedOutputVolume.map { abs($0 - outputVolume) >= 0.01 } ?? true
+        let shouldLog = lastLoggedInjectionVolume.map { abs($0 - injectionVolume) >= 0.01 } ?? true
         if shouldLog {
-            lastLoggedOutputVolume = outputVolume
+            lastLoggedInjectionVolume = injectionVolume
             DiagnosticLogStore.shared.log(
-                "设置文件音频音量",
+                "设置注入音量",
                 source: .playback,
                 details: [
-                    "volume=\(formatPercent(Double(outputVolume)))",
+                    "volume=\(formatPercent(Double(injectionVolume)))",
                     "activePlayers=\(sessionsByClipID.count)",
-                    "engineRunning=\(engine.isRunning)"
+                    "engineRunning=\(engine.isRunning)",
+                    "mainMixerVolume=\(formatPercent(Double(engine.mainMixerNode.outputVolume)))"
+                ]
+            )
+        }
+    }
+
+    func setMonitorVolume(_ volume: Double) {
+        monitorVolume = Float(min(max(volume, 0), 1))
+        engine.mainMixerNode.outputVolume = monitorVolume
+
+        let shouldLog = lastLoggedMonitorVolume.map { abs($0 - monitorVolume) >= 0.01 } ?? true
+        if shouldLog {
+            lastLoggedMonitorVolume = monitorVolume
+            DiagnosticLogStore.shared.log(
+                "设置本机监听音量",
+                source: .playback,
+                details: [
+                    "volume=\(formatPercent(Double(monitorVolume)))",
+                    "activePlayers=\(sessionsByClipID.count)",
+                    "engineRunning=\(engine.isRunning)",
+                    "nodeVolume=\(formatPercent(Double(injectionVolume)))"
                 ]
             )
         }
@@ -197,7 +224,8 @@ final class AudioPlaybackManager: ObservableObject {
                 "state=\(playbackStateDescription(for: clip.id))"
             ]
         )
-        setOutputVolume(volume)
+        setInjectionVolume(volume)
+        setMonitorVolume(Double(monitorVolume))
 
         switch playbackState(for: clip.id) {
         case .playing:
@@ -224,7 +252,8 @@ final class AudioPlaybackManager: ObservableObject {
                 "clipID=\(shortID(clip.id))",
                 "file=\(url.lastPathComponent)",
                 "exists=\(FileManager.default.fileExists(atPath: url.path))",
-                "volume=\(formatPercent(Double(outputVolume)))"
+                "injectionVolume=\(formatPercent(Double(injectionVolume)))",
+                "monitorVolume=\(formatPercent(Double(monitorVolume)))"
             ]
         )
 
@@ -239,7 +268,7 @@ final class AudioPlaybackManager: ObservableObject {
             removeSession(for: clip.id, preserveSessionCounters: true)
 
             let session = EnginePlaybackSession(clipID: clip.id, audioFile: audioFile, url: url)
-            session.node.volume = outputVolume
+            session.node.volume = injectionVolume
             configurePlaybackProcessing(for: session)
             engine.attach(session.node)
             engine.attach(session.voiceEqualizer)
@@ -287,6 +316,7 @@ final class AudioPlaybackManager: ObservableObject {
                     "fileSampleRate=\(Int(session.sampleRate.rounded()))",
                     "channels=\(audioFile.processingFormat.channelCount)",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "monitorVolume=\(formatPercent(Double(engine.mainMixerNode.outputVolume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",
@@ -340,7 +370,7 @@ final class AudioPlaybackManager: ObservableObject {
         do {
             try configureAudioSession(reapplyInjectionPreference: reapplyInjectionPreference)
             try startEngineIfNeeded()
-            session.node.volume = outputVolume
+            session.node.volume = injectionVolume
             applyPlaybackProcessingMode(to: session)
             session.pausedFrame = nil
             session.node.play()
@@ -368,6 +398,7 @@ final class AudioPlaybackManager: ObservableObject {
                     "clipID=\(shortID(clip.id))",
                     "time=\(formatSeconds(elapsedTime(for: clip.id)))",
                     "nodeVolume=\(formatPercent(Double(session.node.volume)))",
+                    "monitorVolume=\(formatPercent(Double(engine.mainMixerNode.outputVolume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",

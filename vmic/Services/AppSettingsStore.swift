@@ -255,8 +255,12 @@ enum VmicText {
     case compactPlayer
     case expandPlayer
     case currentPlayback
+    case volumeControl
     case inputVolume
     case inputVolumeDetail
+    case monitorVolume
+    case monitorVolumeDetail
+    case separatedVolumeNote
     case playbackProcessing
     case playbackProcessingDetail
     case playbackProcessingDebugNote
@@ -351,6 +355,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var monitorVolume: Double {
+        didSet {
+            UserDefaults.standard.set(monitorVolume, forKey: Self.monitorVolumeKey)
+        }
+    }
+
     @Published var playbackProcessingMode: PlaybackProcessingMode {
         didSet {
             UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
@@ -383,6 +393,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitCountKey = "vmic.playbackLimitCount"
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
+    private static let monitorVolumeKey = "vmic.monitorVolume"
     private static let playbackProcessingModeKey = "vmic.playbackProcessingMode"
     private static let playbackProcessingDefaultMigrationKey = "vmic.playbackProcessingDefaultMigration.officialLike"
     private static let showDurationKey = "vmic.showDuration"
@@ -403,6 +414,8 @@ final class AppSettingsStore: ObservableObject {
         playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
+        let savedMonitorVolume = UserDefaults.standard.object(forKey: Self.monitorVolumeKey) as? Double ?? 1
+        monitorVolume = min(max(savedMonitorVolume, 0), 1)
         let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
         let savedProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:))
         let hasMigratedProcessingDefault = UserDefaults.standard.object(forKey: Self.playbackProcessingDefaultMigrationKey) as? Bool ?? false
@@ -802,10 +815,18 @@ final class AppSettingsStore: ObservableObject {
             return "展开播放"
         case .currentPlayback:
             return "播放中"
+        case .volumeControl:
+            return "音量"
         case .inputVolume:
-            return "输入音量"
+            return "注入音量"
         case .inputVolumeDetail:
-            return "控制音频文件播放并尝试加入通话时的音量；设为 0 会让文件音频静音。"
+            return "控制文件音频进入通话注入链路前的音量。"
+        case .monitorVolume:
+            return "本机监听"
+        case .monitorVolumeDetail:
+            return "控制手机扬声器或耳机侧的播放音量，设为 0 可用于验证远端是否仍能听到。"
+        case .separatedVolumeNote:
+            return "本机监听是否影响远端，取决于 iOS 实际取流位置。建议在通话中把监听设为 0 进行确认。"
         case .playbackProcessing:
             return "处理方式"
         case .playbackProcessingDetail:
@@ -1239,10 +1260,18 @@ final class AppSettingsStore: ObservableObject {
             return "Expand Player"
         case .currentPlayback:
             return "Playing"
+        case .volumeControl:
+            return "Volume"
         case .inputVolume:
-            return "Input Volume"
+            return "Injection Volume"
         case .inputVolumeDetail:
-            return "Controls audio file playback volume while vmic tries to add it to calls. Setting it to 0 mutes file audio."
+            return "Controls file audio before it enters the call injection path."
+        case .monitorVolume:
+            return "Local Monitor"
+        case .monitorVolumeDetail:
+            return "Controls playback volume on this iPhone's speaker or headphones. Set it to 0 to check whether the remote side still hears audio."
+        case .separatedVolumeNote:
+            return "Whether local monitoring affects remote audio depends on where iOS captures the injected stream. Test with local monitoring at 0 during a call."
         case .playbackProcessing:
             return "Processing"
         case .playbackProcessingDetail:

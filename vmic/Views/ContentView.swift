@@ -125,8 +125,16 @@ struct ContentView: View {
                 DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
             }
             configurePlaybackFinishHandler()
+            playbackManager.setInjectionVolume(settingsStore.inputVolume)
+            playbackManager.setMonitorVolume(settingsStore.monitorVolume)
             applyPlaybackProcessingMode(settingsStore.playbackProcessingMode)
             await injectionManager.refresh()
+        }
+        .onChange(of: settingsStore.inputVolume) { _, newValue in
+            playbackManager.setInjectionVolume(newValue)
+        }
+        .onChange(of: settingsStore.monitorVolume) { _, newValue in
+            playbackManager.setMonitorVolume(newValue)
         }
         .onChange(of: settingsStore.playbackProcessingMode) { _, newValue in
             applyPlaybackProcessingMode(newValue)

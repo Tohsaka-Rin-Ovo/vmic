@@ -110,7 +110,7 @@ struct InjectionControlPanel: View {
                 .accessibilityLabel(settingsStore.text(.injectionSwitch))
             }
 
-            InputVolumeControl()
+            PlaybackVolumeControls()
 
             PlaybackProcessingModeControl()
 
@@ -216,29 +216,61 @@ private struct PlaybackProcessingModeControl: View {
     }
 }
 
-private struct InputVolumeControl: View {
+private struct PlaybackVolumeControls: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
+            PlaybackVolumeSlider(
+                title: settingsStore.text(.inputVolume),
+                systemImage: "waveform",
+                value: $settingsStore.inputVolume
+            )
+
+            Divider()
+                .overlay(VmicTheme.blue.opacity(0.10))
+
+            PlaybackVolumeSlider(
+                title: settingsStore.text(.monitorVolume),
+                systemImage: "speaker.wave.2",
+                value: $settingsStore.monitorVolume
+            )
+
+            Text(settingsStore.text(.separatedVolumeNote))
+                .font(.caption2.weight(.medium))
+                .foregroundStyle(VmicTheme.mutedInk.opacity(0.84))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(12)
+        .background(VmicTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+}
+
+private struct PlaybackVolumeSlider: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let title: String
+    let systemImage: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Label(settingsStore.text(.inputVolume), systemImage: "speaker.wave.2")
+                Label(title, systemImage: systemImage)
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(VmicTheme.ink)
 
                 Spacer()
 
-                Text(settingsStore.text(.volumePercent(Int((settingsStore.inputVolume * 100).rounded()))))
+                Text(settingsStore.text(.volumePercent(Int((value * 100).rounded()))))
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(VmicTheme.mutedInk)
                     .monospacedDigit()
             }
 
-            Slider(value: $settingsStore.inputVolume, in: 0...1)
+            Slider(value: $value, in: 0...1)
                 .tint(VmicTheme.blue)
         }
-        .padding(12)
-        .background(VmicTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
     }
 }
 
