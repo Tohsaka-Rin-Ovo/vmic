@@ -179,7 +179,7 @@ private struct PlaybackProcessingModeControl: View {
                 Spacer(minLength: 8)
 
                 Menu {
-                    ForEach(PlaybackProcessingMode.allCases) { mode in
+                    ForEach(PlaybackProcessingMode.userSelectableCases) { mode in
                         Button {
                             settingsStore.playbackProcessingMode = mode
                         } label: {

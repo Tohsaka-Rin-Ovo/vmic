@@ -848,7 +848,7 @@ private struct DebugPlaybackProcessingCard: View {
             isHighlighted: isHighlighted
         ) {
             VStack(spacing: 8) {
-                ForEach(PlaybackProcessingMode.allCases) { mode in
+                ForEach(PlaybackProcessingMode.debugCases) { mode in
                     Button {
                         settingsStore.playbackProcessingMode = mode
                     } label: {
@@ -881,6 +881,20 @@ private struct DebugPlaybackProcessingCard: View {
                     .buttonStyle(.plain)
                 }
             }
+
+            HStack(alignment: .top, spacing: 8) {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(Color(red: 0.88, green: 0.58, blue: 0.12))
+                    .frame(width: 16, height: 16)
+
+                Text(settingsStore.text(.playbackProcessingDualPlaybackVerifiedNote))
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(VmicTheme.mutedInk.opacity(0.90))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(10)
+            .background(Color(red: 1.0, green: 0.74, blue: 0.22).opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             Text(settingsStore.text(.playbackProcessingDebugNote))
                 .font(.caption2.weight(.medium))

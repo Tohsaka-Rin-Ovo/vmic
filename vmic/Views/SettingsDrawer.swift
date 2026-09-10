@@ -271,7 +271,7 @@ private struct PlaybackProcessingSettingsView: View {
     var body: some View {
         List {
             Section {
-                ForEach(PlaybackProcessingMode.allCases) { mode in
+                ForEach(PlaybackProcessingMode.userSelectableCases) { mode in
                     Button {
                         settingsStore.playbackProcessingMode = mode
                     } label: {

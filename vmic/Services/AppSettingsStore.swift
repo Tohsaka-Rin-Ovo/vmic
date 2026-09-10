@@ -70,6 +70,14 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
         rawValue
     }
 
+    static var userSelectableCases: [PlaybackProcessingMode] {
+        [.officialLike, .aiNoiseReduction, .standard, .combinedVoice]
+    }
+
+    static var debugCases: [PlaybackProcessingMode] {
+        allCases
+    }
+
     var usesExplicitAudioSession: Bool {
         self != .officialLike
     }
@@ -277,6 +285,7 @@ enum VmicText {
     case playbackProcessingAINoiseReductionDetail
     case playbackProcessingDualPlayback
     case playbackProcessingDualPlaybackDetail
+    case playbackProcessingDualPlaybackVerifiedNote
     case playbackProcessingCombined
     case playbackProcessingCombinedDetail
     case voiceOptimizedPlayback
@@ -859,7 +868,9 @@ final class AppSettingsStore: ObservableObject {
         case .playbackProcessingDualPlayback:
             return "双链路实验"
         case .playbackProcessingDualPlaybackDetail:
-            return "同时启动注入主链路和监听副链路，监听滑块只控制副链路，用于验证 iOS 是否允许远端和本机分离。"
+            return "同时启动注入主链路和监听副链路，仅保留在调试页用于复现实验结论。"
+        case .playbackProcessingDualPlaybackVerifiedNote:
+            return "已验证：双链路可以让远端听到主链路，但本机仍会听到主链路，不能实现“远端正常，本机监听=0”。"
         case .playbackProcessingCombined:
             return "组合增强"
         case .playbackProcessingCombinedDetail:
@@ -1308,7 +1319,9 @@ final class AppSettingsStore: ObservableObject {
         case .playbackProcessingDualPlayback:
             return "Dual Chain"
         case .playbackProcessingDualPlaybackDetail:
-            return "Runs an injection path and a local monitor path together so you can test whether iOS allows remote and local volume separation."
+            return "Runs an injection path and a local monitor path together, kept only on the debug page for reproducing the experiment result."
+        case .playbackProcessingDualPlaybackVerifiedNote:
+            return "Verified: the remote side can hear the main path, but this iPhone still hears it too. It cannot achieve remote audio with local monitoring at 0."
         case .playbackProcessingCombined:
             return "Combined Boost"
         case .playbackProcessingCombinedDetail:
