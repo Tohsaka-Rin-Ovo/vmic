@@ -62,6 +62,7 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
 enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     case officialLike
     case aiNoiseReduction
+    case dualPlayback
     case standard
     case combinedVoice
 
@@ -79,6 +80,10 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
 
     var usesNoiseReductionAdaptation: Bool {
         self == .aiNoiseReduction
+    }
+
+    var usesDualPlaybackChain: Bool {
+        self == .dualPlayback
     }
 }
 
@@ -270,6 +275,8 @@ enum VmicText {
     case playbackProcessingOfficialLikeDetail
     case playbackProcessingAINoiseReduction
     case playbackProcessingAINoiseReductionDetail
+    case playbackProcessingDualPlayback
+    case playbackProcessingDualPlaybackDetail
     case playbackProcessingCombined
     case playbackProcessingCombinedDetail
     case voiceOptimizedPlayback
@@ -442,6 +449,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingOfficialLike)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReduction)
+        case .dualPlayback:
+            return text(.playbackProcessingDualPlayback)
         case .combinedVoice:
             return text(.playbackProcessingCombined)
         }
@@ -455,6 +464,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingOfficialLikeDetail)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReductionDetail)
+        case .dualPlayback:
+            return text(.playbackProcessingDualPlaybackDetail)
         case .combinedVoice:
             return text(.playbackProcessingCombinedDetail)
         }
@@ -826,7 +837,7 @@ final class AppSettingsStore: ObservableObject {
         case .monitorVolumeDetail:
             return "控制手机扬声器或耳机侧的播放音量，设为 0 可用于验证远端是否仍能听到。"
         case .separatedVolumeNote:
-            return "本机监听是否影响远端，取决于 iOS 实际取流位置。建议在通话中把监听设为 0 进行确认。"
+            return "本机监听是否影响远端，取决于 iOS 实际取流位置。双链路实验会让监听滑块只控制副链路，建议在通话中对比确认。"
         case .playbackProcessing:
             return "处理方式"
         case .playbackProcessingDetail:
@@ -845,6 +856,10 @@ final class AppSettingsStore: ObservableObject {
             return "AI 降噪适配"
         case .playbackProcessingAINoiseReductionDetail:
             return "收窄音乐频段并增强人声清晰区，适合 KOOK 等通话降噪较强的场景。"
+        case .playbackProcessingDualPlayback:
+            return "双链路实验"
+        case .playbackProcessingDualPlaybackDetail:
+            return "同时启动注入主链路和监听副链路，监听滑块只控制副链路，用于验证 iOS 是否允许远端和本机分离。"
         case .playbackProcessingCombined:
             return "组合增强"
         case .playbackProcessingCombinedDetail:
@@ -1271,7 +1286,7 @@ final class AppSettingsStore: ObservableObject {
         case .monitorVolumeDetail:
             return "Controls playback volume on this iPhone's speaker or headphones. Set it to 0 to check whether the remote side still hears audio."
         case .separatedVolumeNote:
-            return "Whether local monitoring affects remote audio depends on where iOS captures the injected stream. Test with local monitoring at 0 during a call."
+            return "Whether local monitoring affects remote audio depends on where iOS captures the injected stream. The dual-chain experiment lets the monitor slider control only the secondary path for call testing."
         case .playbackProcessing:
             return "Processing"
         case .playbackProcessingDetail:
@@ -1290,6 +1305,10 @@ final class AppSettingsStore: ObservableObject {
             return "AI Noise Fit"
         case .playbackProcessingAINoiseReductionDetail:
             return "Narrows music-like content and boosts speech clarity bands for call apps with aggressive noise reduction."
+        case .playbackProcessingDualPlayback:
+            return "Dual Chain"
+        case .playbackProcessingDualPlaybackDetail:
+            return "Runs an injection path and a local monitor path together so you can test whether iOS allows remote and local volume separation."
         case .playbackProcessingCombined:
             return "Combined Boost"
         case .playbackProcessingCombinedDetail:
