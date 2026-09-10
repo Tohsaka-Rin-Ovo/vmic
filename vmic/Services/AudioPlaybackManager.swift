@@ -645,7 +645,7 @@ final class AudioPlaybackManager: ObservableObject {
     }
 
     private func applyGlobalVolumeRouting() {
-        engine.mainMixerNode.outputVolume = playbackProcessingMode.usesDualPlaybackChain ? 1 : monitorVolume
+        engine.mainMixerNode.outputVolume = 1
         sessionsByClipID.values.forEach { session in
             applyVolumeRouting(to: session)
         }

@@ -882,6 +882,27 @@ private struct DebugPlaybackProcessingCard: View {
                 }
             }
 
+            if settingsStore.playbackProcessingMode == .dualPlayback {
+                VStack(alignment: .leading, spacing: 10) {
+                    DebugVolumeSlider(
+                        title: settingsStore.text(.inputVolume),
+                        systemImage: "waveform",
+                        value: $settingsStore.inputVolume
+                    )
+
+                    Divider()
+                        .overlay(VmicTheme.blue.opacity(0.10))
+
+                    DebugVolumeSlider(
+                        title: settingsStore.text(.monitorVolume),
+                        systemImage: "speaker.wave.2",
+                        value: $settingsStore.monitorVolume
+                    )
+                }
+                .padding(10)
+                .background(VmicTheme.blue.opacity(0.06), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+            }
+
             HStack(alignment: .top, spacing: 8) {
                 Image(systemName: "exclamationmark.triangle.fill")
                     .font(.caption.weight(.semibold))
@@ -900,6 +921,34 @@ private struct DebugPlaybackProcessingCard: View {
                 .font(.caption2.weight(.medium))
                 .foregroundStyle(VmicTheme.mutedInk.opacity(0.84))
                 .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+}
+
+private struct DebugVolumeSlider: View {
+    @EnvironmentObject private var settingsStore: AppSettingsStore
+
+    let title: String
+    let systemImage: String
+    @Binding var value: Double
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 7) {
+            HStack(spacing: 8) {
+                Label(title, systemImage: systemImage)
+                    .font(.caption.weight(.semibold))
+                    .foregroundStyle(VmicTheme.ink)
+
+                Spacer()
+
+                Text(settingsStore.text(.volumePercent(Int((value * 100).rounded()))))
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(VmicTheme.mutedInk)
+                    .monospacedDigit()
+            }
+
+            Slider(value: $value, in: 0...1)
+                .tint(VmicTheme.blue)
         }
     }
 }

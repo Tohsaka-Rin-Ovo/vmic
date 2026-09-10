@@ -1217,19 +1217,6 @@ private struct PlaybackSessionVolumeControls: View {
                 systemImage: "waveform",
                 value: $settingsStore.inputVolume
             )
-
-            Divider()
-
-            PlaybackSessionVolumeSlider(
-                title: settingsStore.text(.monitorVolume),
-                systemImage: "speaker.wave.2",
-                value: $settingsStore.monitorVolume
-            )
-
-            Text(settingsStore.text(.separatedVolumeNote))
-                .font(.caption)
-                .foregroundStyle(VmicTheme.mutedInk)
-                .fixedSize(horizontal: false, vertical: true)
         }
     }
 }

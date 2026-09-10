@@ -226,20 +226,6 @@ private struct PlaybackVolumeControls: View {
                 systemImage: "waveform",
                 value: $settingsStore.inputVolume
             )
-
-            Divider()
-                .overlay(VmicTheme.blue.opacity(0.10))
-
-            PlaybackVolumeSlider(
-                title: settingsStore.text(.monitorVolume),
-                systemImage: "speaker.wave.2",
-                value: $settingsStore.monitorVolume
-            )
-
-            Text(settingsStore.text(.separatedVolumeNote))
-                .font(.caption2.weight(.medium))
-                .foregroundStyle(VmicTheme.mutedInk.opacity(0.84))
-                .fixedSize(horizontal: false, vertical: true)
         }
         .padding(12)
         .background(VmicTheme.blue.opacity(0.08), in: RoundedRectangle(cornerRadius: 8, style: .continuous))

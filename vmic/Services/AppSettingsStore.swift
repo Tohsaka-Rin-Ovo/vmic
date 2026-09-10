@@ -844,9 +844,9 @@ final class AppSettingsStore: ObservableObject {
         case .monitorVolume:
             return "本机监听"
         case .monitorVolumeDetail:
-            return "控制手机扬声器或耳机侧的播放音量，设为 0 可用于验证远端是否仍能听到。"
+            return "仅用于调试页的双链路实验；普通播放模式不会再使用它压低输出。"
         case .separatedVolumeNote:
-            return "本机监听是否影响远端，取决于 iOS 实际取流位置。双链路实验会让监听滑块只控制副链路，建议在通话中对比确认。"
+            return "本机监听仅保留为调试变量。已验证它无法做到远端正常、本机完全静音。"
         case .playbackProcessing:
             return "处理方式"
         case .playbackProcessingDetail:
@@ -1295,9 +1295,9 @@ final class AppSettingsStore: ObservableObject {
         case .monitorVolume:
             return "Local Monitor"
         case .monitorVolumeDetail:
-            return "Controls playback volume on this iPhone's speaker or headphones. Set it to 0 to check whether the remote side still hears audio."
+            return "Only used by the debug-page dual-chain experiment. Normal playback no longer uses it to lower output."
         case .separatedVolumeNote:
-            return "Whether local monitoring affects remote audio depends on where iOS captures the injected stream. The dual-chain experiment lets the monitor slider control only the secondary path for call testing."
+            return "Local monitoring is kept only as a debug variable. Testing showed it cannot keep remote audio normal while this iPhone is fully muted."
         case .playbackProcessing:
             return "Processing"
         case .playbackProcessingDetail:
