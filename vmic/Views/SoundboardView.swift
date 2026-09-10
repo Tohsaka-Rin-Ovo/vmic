@@ -70,9 +70,18 @@ struct SoundboardView: View {
         .navigationDestination(item: $debugDestination) { target in
             DebugDiagnosticsView(initialFocus: target.initialFocus)
         }
+        .onAppear {
+            settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
+        }
+        .onChange(of: debugDestination) { _, newValue in
+            guard newValue == nil else { return }
+            settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
+        }
     }
 
     private func togglePlayback(_ clip: SoundClip) {
+        settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
+
         if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
             playbackManager.stopAll()
         }
@@ -337,6 +346,8 @@ private struct AudioLibraryView: View {
     }
 
     private func togglePlayback(_ clip: SoundClip) {
+        settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
+
         if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
             playbackManager.stopAll()
         }
@@ -1165,6 +1176,8 @@ struct PlaybackSessionSettingsView: View {
     }
 
     private func playFromQueue(_ clip: SoundClip) {
+        settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
+
         if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
             playbackManager.stopAll()
         }

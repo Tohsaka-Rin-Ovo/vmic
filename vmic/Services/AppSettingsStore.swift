@@ -93,6 +93,10 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     var usesDualPlaybackChain: Bool {
         self == .dualPlayback
     }
+
+    var isUserSelectable: Bool {
+        Self.userSelectableCases.contains(self)
+    }
 }
 
 enum VmicText {
@@ -379,6 +383,7 @@ final class AppSettingsStore: ObservableObject {
 
     @Published var playbackProcessingMode: PlaybackProcessingMode {
         didSet {
+            guard playbackProcessingMode.isUserSelectable else { return }
             UserDefaults.standard.set(playbackProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
         }
     }
@@ -434,13 +439,23 @@ final class AppSettingsStore: ObservableObject {
         monitorVolume = min(max(savedMonitorVolume, 0), 1)
         let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
         let savedProcessingMode = rawProcessingMode.flatMap(PlaybackProcessingMode.init(rawValue:))
+        let sanitizedProcessingMode: PlaybackProcessingMode?
+        if let savedProcessingMode, savedProcessingMode.isUserSelectable {
+            sanitizedProcessingMode = savedProcessingMode
+        } else {
+            sanitizedProcessingMode = nil
+        }
         let hasMigratedProcessingDefault = UserDefaults.standard.object(forKey: Self.playbackProcessingDefaultMigrationKey) as? Bool ?? false
         if hasMigratedProcessingDefault {
-            playbackProcessingMode = savedProcessingMode ?? .officialLike
+            let restoredProcessingMode = sanitizedProcessingMode ?? .officialLike
+            playbackProcessingMode = restoredProcessingMode
+            if savedProcessingMode?.rawValue != restoredProcessingMode.rawValue {
+                UserDefaults.standard.set(restoredProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
+            }
         } else {
-            let migratedProcessingMode = savedProcessingMode == .combinedVoice
+            let migratedProcessingMode = sanitizedProcessingMode == .combinedVoice
                 ? PlaybackProcessingMode.officialLike
-                : savedProcessingMode ?? .officialLike
+                : sanitizedProcessingMode ?? .officialLike
             playbackProcessingMode = migratedProcessingMode
             UserDefaults.standard.set(migratedProcessingMode.rawValue, forKey: Self.playbackProcessingModeKey)
             UserDefaults.standard.set(true, forKey: Self.playbackProcessingDefaultMigrationKey)
@@ -448,6 +463,21 @@ final class AppSettingsStore: ObservableObject {
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
+    }
+
+    func resetDebugPlaybackProcessingModeIfNeeded() {
+        guard !playbackProcessingMode.isUserSelectable else { return }
+
+        let previousMode = playbackProcessingMode
+        playbackProcessingMode = .officialLike
+        DiagnosticLogStore.shared.log(
+            "离开调试播放模式，恢复普通播放处理方式",
+            source: .playback,
+            details: [
+                "previousMode=\(previousMode.rawValue)",
+                "restoredMode=\(playbackProcessingMode.rawValue)"
+            ]
+        )
     }
 
     func playbackProcessingTitle(_ mode: PlaybackProcessingMode) -> String {
