@@ -465,25 +465,34 @@ final class AudioPlaybackManager: ObservableObject {
         removeSession(for: clip.id)
     }
 
-    func stopAll() {
+    func stopAll(except preservedClipID: UUID? = nil) {
+        let clipIDsToStop = sessionsByClipID.keys.filter { $0 != preservedClipID }
         DiagnosticLogStore.shared.log(
             "停止全部音频",
             source: .playback,
             details: [
                 "activePlayers=\(sessionsByClipID.count)",
+                "stoppedPlayers=\(clipIDsToStop.count)",
+                "preservedClipID=\(preservedClipID.map { shortID($0) } ?? "none")",
                 "engineRunning=\(engine.isRunning)"
             ]
         )
 
-        Array(sessionsByClipID.keys).forEach { clipID in
+        clipIDsToStop.forEach { clipID in
             removeSession(for: clipID)
         }
-        playbackStartedAtByClipID.removeAll()
-        playbackCompletionCountByClipID.removeAll()
-        progressTimer?.invalidate()
-        progressTimer = nil
 
-        if engine.isRunning {
+        if preservedClipID == nil {
+            playbackStartedAtByClipID.removeAll()
+            playbackCompletionCountByClipID.removeAll()
+        }
+
+        if sessionsByClipID.isEmpty {
+            progressTimer?.invalidate()
+            progressTimer = nil
+        }
+
+        if sessionsByClipID.isEmpty, engine.isRunning {
             engine.pause()
         }
     }

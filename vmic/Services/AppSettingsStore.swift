@@ -74,6 +74,10 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
         [.officialLike, .aiNoiseReduction, .standard, .combinedVoice]
     }
 
+    static func mainSurfaceCases(current mode: PlaybackProcessingMode) -> [PlaybackProcessingMode] {
+        mode == .dualPlayback ? [.dualPlayback] + userSelectableCases : userSelectableCases
+    }
+
     static var debugCases: [PlaybackProcessingMode] {
         allCases
     }
@@ -463,21 +467,6 @@ final class AppSettingsStore: ObservableObject {
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
-    }
-
-    func resetDebugPlaybackProcessingModeIfNeeded() {
-        guard !playbackProcessingMode.isUserSelectable else { return }
-
-        let previousMode = playbackProcessingMode
-        playbackProcessingMode = .officialLike
-        DiagnosticLogStore.shared.log(
-            "离开调试播放模式，恢复普通播放处理方式",
-            source: .playback,
-            details: [
-                "previousMode=\(previousMode.rawValue)",
-                "restoredMode=\(playbackProcessingMode.rawValue)"
-            ]
-        )
     }
 
     func playbackProcessingTitle(_ mode: PlaybackProcessingMode) -> String {
@@ -912,9 +901,9 @@ final class AppSettingsStore: ObservableObject {
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:
-            return "单音频播放"
+            return "不允许多音频同时播放"
         case .singlePlaybackDetail:
-            return "播放新音频时停止其他音频。"
+            return "开启后，点击新的音频会自动停止原先正在播放或暂停的音频。"
         case .list:
             return "列表"
         case .showDuration:
@@ -1363,9 +1352,9 @@ final class AppSettingsStore: ObservableObject {
         case .volumePercent(let value):
             return "\(value)%"
         case .singlePlayback:
-            return "Single Playback"
+            return "Prevent Multiple Audio"
         case .singlePlaybackDetail:
-            return "Stop other sounds when a new sound plays."
+            return "When enabled, playing a new sound stops any previously playing or paused sound."
         case .list:
             return "List"
         case .showDuration:

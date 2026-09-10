@@ -255,10 +255,8 @@ struct ContentView: View {
     }
 
     private func togglePlayback(_ clip: SoundClip) {
-        settingsStore.resetDebugPlaybackProcessingModeIfNeeded()
-
-        if settingsStore.singlePlayback && playbackManager.playbackState(for: clip.id) == nil {
-            playbackManager.stopAll()
+        if settingsStore.singlePlayback {
+            playbackManager.stopAll(except: clip.id)
         }
 
         playbackManager.toggle(
