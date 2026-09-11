@@ -839,6 +839,17 @@ private struct DebugPlaybackProcessingCard: View {
 
     let isHighlighted: Bool
 
+    private var activeInputVolume: Binding<Double> {
+        Binding(
+            get: {
+                settingsStore.activeInputVolume
+            },
+            set: { newValue in
+                settingsStore.setActiveInputVolume(newValue)
+            }
+        )
+    }
+
     var body: some View {
         DebugCard(
             title: settingsStore.text(.playbackProcessing),
@@ -887,7 +898,7 @@ private struct DebugPlaybackProcessingCard: View {
                     DebugVolumeSlider(
                         title: settingsStore.text(.inputVolume),
                         systemImage: "waveform",
-                        value: $settingsStore.inputVolume
+                        value: activeInputVolume
                     )
 
                     Divider()

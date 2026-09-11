@@ -481,13 +481,24 @@ private struct SettingsLinkRow: View {
 private struct SettingsVolumeRow: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    private var activeInputVolume: Binding<Double> {
+        Binding(
+            get: {
+                settingsStore.activeInputVolume
+            },
+            set: { newValue in
+                settingsStore.setActiveInputVolume(newValue)
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             SettingsVolumeSlider(
                 title: settingsStore.text(.inputVolume),
                 detail: settingsStore.text(.inputVolumeDetail),
                 systemImage: "waveform",
-                value: $settingsStore.inputVolume
+                value: activeInputVolume
             )
 
             if settingsStore.playbackProcessingMode.usesDualPlaybackChain {

@@ -125,12 +125,17 @@ struct ContentView: View {
                 DiagnosticLogStore.shared.log("根视图首次刷新注入状态", source: .app)
             }
             configurePlaybackFinishHandler()
-            playbackManager.setInjectionVolume(settingsStore.inputVolume)
+            playbackManager.setInjectionVolume(settingsStore.activeInputVolume)
             playbackManager.setMonitorVolume(settingsStore.monitorVolume)
             applyPlaybackProcessingMode(settingsStore.playbackProcessingMode)
             await injectionManager.refresh()
         }
         .onChange(of: settingsStore.inputVolume) { _, newValue in
+            guard !settingsStore.playbackProcessingMode.usesDualPlaybackChain else { return }
+            playbackManager.setInjectionVolume(newValue)
+        }
+        .onChange(of: settingsStore.dualPlaybackInputVolume) { _, newValue in
+            guard settingsStore.playbackProcessingMode.usesDualPlaybackChain else { return }
             playbackManager.setInjectionVolume(newValue)
         }
         .onChange(of: settingsStore.monitorVolume) { _, newValue in
@@ -238,6 +243,7 @@ struct ContentView: View {
 
     private func applyPlaybackProcessingMode(_ mode: PlaybackProcessingMode) {
         playbackManager.setPlaybackProcessingMode(mode)
+        playbackManager.setInjectionVolume(settingsStore.activeInputVolume)
         guard !playbackManager.activeClipIDs.isEmpty else { return }
 
         do {
@@ -262,7 +268,7 @@ struct ContentView: View {
         playbackManager.toggle(
             clip,
             from: libraryStore.soundsDirectory,
-            volume: settingsStore.inputVolume,
+            volume: settingsStore.activeInputVolume,
             reapplyInjectionPreference: {
                 try injectionManager.reinforceInjectionAudioSession(reason: "togglePlayback")
             }

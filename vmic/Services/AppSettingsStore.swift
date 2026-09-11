@@ -379,6 +379,12 @@ final class AppSettingsStore: ObservableObject {
         }
     }
 
+    @Published var dualPlaybackInputVolume: Double {
+        didSet {
+            UserDefaults.standard.set(dualPlaybackInputVolume, forKey: Self.dualPlaybackInputVolumeKey)
+        }
+    }
+
     @Published var monitorVolume: Double {
         didSet {
             UserDefaults.standard.set(monitorVolume, forKey: Self.monitorVolumeKey)
@@ -418,6 +424,7 @@ final class AppSettingsStore: ObservableObject {
     private static let playbackLimitCountKey = "vmic.playbackLimitCount"
     private static let playbackLimitMinutesKey = "vmic.playbackLimitMinutes"
     private static let inputVolumeKey = "vmic.inputVolume"
+    private static let dualPlaybackInputVolumeKey = "vmic.dualPlaybackInputVolume"
     private static let monitorVolumeKey = "vmic.monitorVolume"
     private static let playbackProcessingModeKey = "vmic.playbackProcessingMode"
     private static let playbackProcessingDefaultMigrationKey = "vmic.playbackProcessingDefaultMigration.officialLike"
@@ -439,6 +446,8 @@ final class AppSettingsStore: ObservableObject {
         playbackLimitMinutes = max(UserDefaults.standard.integer(forKey: Self.playbackLimitMinutesKey), 1)
         let savedVolume = UserDefaults.standard.object(forKey: Self.inputVolumeKey) as? Double ?? 1
         inputVolume = min(max(savedVolume, 0), 1)
+        let savedDualPlaybackVolume = UserDefaults.standard.object(forKey: Self.dualPlaybackInputVolumeKey) as? Double ?? 1
+        dualPlaybackInputVolume = min(max(savedDualPlaybackVolume, 0), 1)
         let savedMonitorVolume = UserDefaults.standard.object(forKey: Self.monitorVolumeKey) as? Double ?? 1
         monitorVolume = min(max(savedMonitorVolume, 0), 1)
         let rawProcessingMode = UserDefaults.standard.string(forKey: Self.playbackProcessingModeKey)
@@ -467,6 +476,19 @@ final class AppSettingsStore: ObservableObject {
         showDuration = UserDefaults.standard.object(forKey: Self.showDurationKey) as? Bool ?? true
         floatingWindowEnabled = UserDefaults.standard.object(forKey: Self.floatingWindowEnabledKey) as? Bool ?? false
         showFloatingDockInDebug = UserDefaults.standard.object(forKey: Self.showFloatingDockInDebugKey) as? Bool ?? false
+    }
+
+    var activeInputVolume: Double {
+        playbackProcessingMode.usesDualPlaybackChain ? dualPlaybackInputVolume : inputVolume
+    }
+
+    func setActiveInputVolume(_ volume: Double) {
+        let clampedVolume = min(max(volume, 0), 1)
+        if playbackProcessingMode.usesDualPlaybackChain {
+            dualPlaybackInputVolume = clampedVolume
+        } else {
+            inputVolume = clampedVolume
+        }
     }
 
     func playbackProcessingTitle(_ mode: PlaybackProcessingMode) -> String {

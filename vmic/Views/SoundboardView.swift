@@ -80,7 +80,7 @@ struct SoundboardView: View {
         playbackManager.toggle(
             clip,
             from: libraryStore.soundsDirectory,
-            volume: settingsStore.inputVolume,
+            volume: settingsStore.activeInputVolume,
             reapplyInjectionPreference: {
                 try injectionManager.reinforceInjectionAudioSession(reason: "soundboardPlayback")
             }
@@ -344,7 +344,7 @@ private struct AudioLibraryView: View {
         playbackManager.toggle(
             clip,
             from: libraryStore.soundsDirectory,
-            volume: settingsStore.inputVolume,
+            volume: settingsStore.activeInputVolume,
             reapplyInjectionPreference: {
                 try injectionManager.reinforceInjectionAudioSession(reason: "audioLibraryPlayback")
             }
@@ -1172,7 +1172,7 @@ struct PlaybackSessionSettingsView: View {
         playbackManager.toggle(
             clip,
             from: libraryStore.soundsDirectory,
-            volume: settingsStore.inputVolume,
+            volume: settingsStore.activeInputVolume,
             reapplyInjectionPreference: {
                 try injectionManager.reinforceInjectionAudioSession(reason: "playbackSettingsPlayback")
             }
@@ -1210,12 +1210,23 @@ private struct PlaybackSettingsPanel<Content: View>: View {
 private struct PlaybackSessionVolumeControls: View {
     @EnvironmentObject private var settingsStore: AppSettingsStore
 
+    private var activeInputVolume: Binding<Double> {
+        Binding(
+            get: {
+                settingsStore.activeInputVolume
+            },
+            set: { newValue in
+                settingsStore.setActiveInputVolume(newValue)
+            }
+        )
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             PlaybackSessionVolumeSlider(
                 title: settingsStore.text(.inputVolume),
                 systemImage: "waveform",
-                value: $settingsStore.inputVolume
+                value: activeInputVolume
             )
 
             if settingsStore.playbackProcessingMode.usesDualPlaybackChain {
