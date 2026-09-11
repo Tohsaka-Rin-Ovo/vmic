@@ -22,6 +22,7 @@ final class AudioPlaybackManager: ObservableObject {
     private var sessionsByClipID: [UUID: EnginePlaybackSession] = [:]
     private var playbackStartedAtByClipID: [UUID: Date] = [:]
     private var playbackCompletionCountByClipID: [UUID: Int] = [:]
+    private var loudnessAnalysisCache: [URL: LoudnessProfile] = [:]
     private var injectionVolume: Float = 1
     private var monitorVolume: Float = 1
     private var playbackProcessingMode: PlaybackProcessingMode = .officialLike
@@ -29,6 +30,13 @@ final class AudioPlaybackManager: ObservableObject {
     private var lastLoggedMonitorVolume: Float?
     private var lastLoggedPlaybackProcessingMode: PlaybackProcessingMode?
     private var progressTimer: Timer?
+
+    private static let loudnessTargetRMS: Double = 0.125
+    private static let loudnessPeakCeiling: Double = 0.891250938
+    private static let loudnessMaximumBoost: Double = 3.981071706
+    private static let loudnessMaximumCut: Double = 0.501187234
+    private static let loudnessMaximumAnalyzedSeconds: Double = 600
+    private static let loudnessMaximumFramesPerRead: AVAudioFrameCount = 8_192
 
     func playbackState(for clipID: UUID) -> SoundPlaybackState? {
         guard activeClipIDs.contains(clipID) else { return nil }
@@ -205,6 +213,7 @@ final class AudioPlaybackManager: ObservableObject {
             details: [
                 "mode=\(mode.rawValue)",
                 "explicitSession=\(mode.usesExplicitAudioSession)",
+                "loudnessNormalization=\(mode.usesLoudnessNormalization)",
                 "voiceShaping=\(mode.usesVoiceShaping)",
                 "noiseReductionAdaptation=\(mode.usesNoiseReductionAdaptation)",
                 "dualPlaybackChain=\(mode.usesDualPlaybackChain)",
@@ -273,6 +282,7 @@ final class AudioPlaybackManager: ObservableObject {
             guard audioFile.length > 0 else {
                 throw AudioPlaybackError.emptyAudioFile
             }
+            let loudnessProfile = makeLoudnessProfile(for: url)
 
             removeSession(for: clip.id, preserveSessionCounters: true)
 
@@ -280,6 +290,7 @@ final class AudioPlaybackManager: ObservableObject {
                 clipID: clip.id,
                 audioFile: audioFile,
                 monitorAudioFile: monitorAudioFile,
+                loudnessProfile: loudnessProfile,
                 url: url
             )
             configurePlaybackProcessing(for: session)
@@ -340,8 +351,13 @@ final class AudioPlaybackManager: ObservableObject {
                     "monitorMixerVolume=\(formatPercent(Double(session.monitorMixer.outputVolume)))",
                     "mainMixerVolume=\(formatPercent(Double(engine.mainMixerNode.outputVolume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
+                    "loudnessGain=\(formatDecibels(session.loudnessProfile.gainDecibels))",
+                    "loudnessPeak=\(formatLevel(session.loudnessProfile.peak))",
+                    "loudnessRMS=\(formatLevel(session.loudnessProfile.rms))",
+                    "peakProtected=\(session.loudnessProfile.isPeakLimited)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",
+                    "loudnessNormalization=\(playbackProcessingMode.usesLoudnessNormalization)",
                     "dualPlaybackChain=\(playbackProcessingMode.usesDualPlaybackChain)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
@@ -428,8 +444,13 @@ final class AudioPlaybackManager: ObservableObject {
                     "monitorMixerVolume=\(formatPercent(Double(session.monitorMixer.outputVolume)))",
                     "mainMixerVolume=\(formatPercent(Double(engine.mainMixerNode.outputVolume)))",
                     "processingMode=\(playbackProcessingMode.rawValue)",
+                    "loudnessGain=\(formatDecibels(session.loudnessProfile.gainDecibels))",
+                    "loudnessPeak=\(formatLevel(session.loudnessProfile.peak))",
+                    "loudnessRMS=\(formatLevel(session.loudnessProfile.rms))",
+                    "peakProtected=\(session.loudnessProfile.isPeakLimited)",
                     "voiceShaping=\(playbackProcessingMode.usesVoiceShaping)",
                     "noiseReductionAdaptation=\(playbackProcessingMode.usesNoiseReductionAdaptation)",
+                    "loudnessNormalization=\(playbackProcessingMode.usesLoudnessNormalization)",
                     "dualPlaybackChain=\(playbackProcessingMode.usesDualPlaybackChain)",
                     "engineRunning=\(engine.isRunning)"
                 ] + Self.audioSessionDetails(AVAudioSession.sharedInstance())
@@ -610,6 +631,8 @@ final class AudioPlaybackManager: ObservableObject {
 
     private func applyPlaybackProcessingMode(to session: EnginePlaybackSession) {
         switch playbackProcessingMode {
+        case .loudnessStable:
+            applyLoudnessStablePreset(to: session)
         case .aiNoiseReduction:
             applyEqualizerPreset(
                 to: session,
@@ -639,6 +662,16 @@ final class AudioPlaybackManager: ObservableObject {
             session.voiceEqualizer.globalGain = 0
             session.voiceMixer.outputVolume = 1
         }
+    }
+
+    private func applyLoudnessStablePreset(to session: EnginePlaybackSession) {
+        session.voiceEqualizer.bypass = false
+        session.voiceEqualizer.globalGain = Float(session.loudnessProfile.gainDecibels)
+        session.voiceEqualizer.bands.forEach { band in
+            band.bypass = true
+            band.gain = 0
+        }
+        session.voiceMixer.outputVolume = 1
     }
 
     private var playbackRouteDescription: String {
@@ -733,6 +766,106 @@ final class AudioPlaybackManager: ObservableObject {
         band.bandwidth = bandwidth
         band.gain = gain
         band.bypass = false
+    }
+
+    private func makeLoudnessProfile(for url: URL) -> LoudnessProfile {
+        if let cachedProfile = loudnessAnalysisCache[url] {
+            return cachedProfile
+        }
+
+        do {
+            let audioFile = try AVAudioFile(forReading: url)
+            let profile = try analyzeLoudness(audioFile)
+            loudnessAnalysisCache[url] = profile
+            DiagnosticLogStore.shared.log(
+                "响度分析完成",
+                source: .playback,
+                details: [
+                    "file=\(url.lastPathComponent)",
+                    "peak=\(formatLevel(profile.peak))",
+                    "rms=\(formatLevel(profile.rms))",
+                    "gain=\(formatDecibels(profile.gainDecibels))",
+                    "gainMultiplier=\(String(format: "%.2fx", profile.gainMultiplier))",
+                    "peakProtected=\(profile.isPeakLimited)",
+                    "analyzedDuration=\(formatSeconds(profile.analyzedDuration))",
+                    "sampleCount=\(profile.sampleCount)",
+                    "truncated=\(profile.wasTruncated)"
+                ]
+            )
+            return profile
+        } catch {
+            let fallback = LoudnessProfile.neutral(errorDescription: error.localizedDescription)
+            loudnessAnalysisCache[url] = fallback
+            DiagnosticLogStore.shared.log(
+                "响度分析失败，使用原始增益",
+                source: .playback,
+                details: [
+                    "file=\(url.lastPathComponent)",
+                    "error=\(error.localizedDescription)"
+                ]
+            )
+            return fallback
+        }
+    }
+
+    private func analyzeLoudness(_ audioFile: AVAudioFile) throws -> LoudnessProfile {
+        let format = audioFile.processingFormat
+        let maxFramesToRead = min(
+            audioFile.length,
+            AVAudioFramePosition(format.sampleRate * Self.loudnessMaximumAnalyzedSeconds)
+        )
+        guard maxFramesToRead > 0 else {
+            throw AudioPlaybackError.emptyAudioFile
+        }
+
+        audioFile.framePosition = 0
+        var remainingFrames = maxFramesToRead
+        var accumulator = PlaybackAudioLevelAccumulator()
+
+        while remainingFrames > 0 {
+            let frameCount = AVAudioFrameCount(min(remainingFrames, AVAudioFramePosition(Self.loudnessMaximumFramesPerRead)))
+            guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: frameCount) else {
+                throw AudioPlaybackError.loudnessAnalysisFailed
+            }
+
+            try audioFile.read(into: buffer, frameCount: frameCount)
+            guard buffer.frameLength > 0 else { break }
+
+            try accumulator.add(buffer)
+            remainingFrames -= AVAudioFramePosition(buffer.frameLength)
+        }
+
+        guard accumulator.sampleCount > 0 else {
+            throw AudioPlaybackError.loudnessAnalysisFailed
+        }
+
+        let peak = accumulator.peak
+        let rms = sqrt(accumulator.sumSquares / Double(accumulator.sampleCount))
+        let gainMultiplier = automaticGainMultiplier(peak: peak, rms: rms)
+        let gainDecibels = decibels(forMultiplier: gainMultiplier)
+        let peakLimited = peak * gainMultiplier >= Self.loudnessPeakCeiling - 0.0001
+        let analyzedDuration = seconds(for: maxFramesToRead, sampleRate: format.sampleRate)
+
+        return LoudnessProfile(
+            peak: peak,
+            rms: rms,
+            gainMultiplier: gainMultiplier,
+            gainDecibels: gainDecibels,
+            isPeakLimited: peakLimited,
+            analyzedDuration: analyzedDuration,
+            sampleCount: accumulator.sampleCount,
+            wasTruncated: maxFramesToRead < audioFile.length,
+            errorDescription: nil
+        )
+    }
+
+    private func automaticGainMultiplier(peak: Double, rms: Double) -> Double {
+        guard peak > 0, rms > 0 else { return 1 }
+
+        let rmsGain = Self.loudnessTargetRMS / rms
+        let boundedRMSGain = min(max(rmsGain, Self.loudnessMaximumCut), Self.loudnessMaximumBoost)
+        let peakSafeGain = Self.loudnessPeakCeiling / peak
+        return min(max(peakSafeGain, 0.0001), boundedRMSGain)
     }
 
     private func schedule(_ session: EnginePlaybackSession, from frame: AVAudioFramePosition) throws {
@@ -924,6 +1057,21 @@ final class AudioPlaybackManager: ObservableObject {
         return String(format: "%.2fs", seconds)
     }
 
+    private func formatLevel(_ value: Double?) -> String {
+        guard let value, value.isFinite else { return "unknown" }
+        return String(format: "%.4f", value)
+    }
+
+    private func formatDecibels(_ value: Double) -> String {
+        guard value.isFinite else { return "unknown" }
+        return String(format: "%+.1f dB", value)
+    }
+
+    private func decibels(forMultiplier multiplier: Double) -> Double {
+        guard multiplier > 0, multiplier.isFinite else { return 0 }
+        return 20 * log10(multiplier)
+    }
+
     private static func audioSessionDetails(_ session: AVAudioSession) -> [String] {
         var details = [
             "category=\(session.category.rawValue)",
@@ -964,6 +1112,7 @@ private final class EnginePlaybackSession {
     let monitorMixer = AVAudioMixerNode()
     let audioFile: AVAudioFile
     let monitorAudioFile: AVAudioFile
+    let loudnessProfile: LoudnessProfile
     let url: URL
     let sampleRate: Double
     let durationFrames: AVAudioFramePosition
@@ -977,19 +1126,115 @@ private final class EnginePlaybackSession {
         return Double(durationFrames) / sampleRate
     }
 
-    init(clipID: UUID, audioFile: AVAudioFile, monitorAudioFile: AVAudioFile, url: URL) {
+    init(
+        clipID: UUID,
+        audioFile: AVAudioFile,
+        monitorAudioFile: AVAudioFile,
+        loudnessProfile: LoudnessProfile,
+        url: URL
+    ) {
         self.clipID = clipID
         self.audioFile = audioFile
         self.monitorAudioFile = monitorAudioFile
+        self.loudnessProfile = loudnessProfile
         self.url = url
         sampleRate = audioFile.processingFormat.sampleRate
         durationFrames = audioFile.length
     }
 }
 
+private struct LoudnessProfile {
+    let peak: Double?
+    let rms: Double?
+    let gainMultiplier: Double
+    let gainDecibels: Double
+    let isPeakLimited: Bool
+    let analyzedDuration: TimeInterval
+    let sampleCount: Int
+    let wasTruncated: Bool
+    let errorDescription: String?
+
+    static func neutral(errorDescription: String? = nil) -> LoudnessProfile {
+        LoudnessProfile(
+            peak: nil,
+            rms: nil,
+            gainMultiplier: 1,
+            gainDecibels: 0,
+            isPeakLimited: false,
+            analyzedDuration: 0,
+            sampleCount: 0,
+            wasTruncated: false,
+            errorDescription: errorDescription
+        )
+    }
+}
+
+private struct PlaybackAudioLevelAccumulator {
+    var peak: Double = 0
+    var sumSquares: Double = 0
+    var sampleCount: Int = 0
+
+    mutating func add(_ buffer: AVAudioPCMBuffer) throws {
+        let channelCount = Int(buffer.format.channelCount)
+        let frameCount = Int(buffer.frameLength)
+        guard channelCount > 0, frameCount > 0 else { return }
+
+        let pointerCount = buffer.format.isInterleaved ? 1 : channelCount
+        let sampleCountPerPointer = frameCount * (buffer.format.isInterleaved ? channelCount : 1)
+
+        switch buffer.format.commonFormat {
+        case .pcmFormatFloat32:
+            guard let data = buffer.floatChannelData else {
+                throw AudioPlaybackError.loudnessAnalysisFailed
+            }
+
+            for pointerIndex in 0..<pointerCount {
+                let pointer = data[pointerIndex]
+                for sampleIndex in 0..<sampleCountPerPointer {
+                    add(Double(pointer[sampleIndex]))
+                }
+            }
+        case .pcmFormatInt16:
+            guard let data = buffer.int16ChannelData else {
+                throw AudioPlaybackError.loudnessAnalysisFailed
+            }
+
+            for pointerIndex in 0..<pointerCount {
+                let pointer = data[pointerIndex]
+                for sampleIndex in 0..<sampleCountPerPointer {
+                    add(Double(pointer[sampleIndex]) / Double(Int16.max))
+                }
+            }
+        case .pcmFormatInt32:
+            guard let data = buffer.int32ChannelData else {
+                throw AudioPlaybackError.loudnessAnalysisFailed
+            }
+
+            for pointerIndex in 0..<pointerCount {
+                let pointer = data[pointerIndex]
+                for sampleIndex in 0..<sampleCountPerPointer {
+                    add(Double(pointer[sampleIndex]) / Double(Int32.max))
+                }
+            }
+        case .otherFormat, .pcmFormatFloat64:
+            throw AudioPlaybackError.loudnessAnalysisFailed
+        @unknown default:
+            throw AudioPlaybackError.loudnessAnalysisFailed
+        }
+    }
+
+    private mutating func add(_ sample: Double) {
+        let absoluteValue = abs(sample)
+        peak = max(peak, absoluteValue)
+        sumSquares += absoluteValue * absoluteValue
+        sampleCount += 1
+    }
+}
+
 private enum AudioPlaybackError: LocalizedError {
     case emptyAudioFile
     case playbackDidNotStart
+    case loudnessAnalysisFailed
 
     var errorDescription: String? {
         switch self {
@@ -997,6 +1242,8 @@ private enum AudioPlaybackError: LocalizedError {
             return "音频文件没有可播放的采样帧。"
         case .playbackDidNotStart:
             return "系统没有启动音频播放。"
+        case .loudnessAnalysisFailed:
+            return "无法分析当前音频文件的响度。"
         }
     }
 }

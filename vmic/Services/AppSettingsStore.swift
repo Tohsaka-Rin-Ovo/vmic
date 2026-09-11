@@ -61,6 +61,7 @@ enum PlaybackLimitMode: String, CaseIterable, Identifiable {
 
 enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     case officialLike
+    case loudnessStable
     case aiNoiseReduction
     case dualPlayback
     case standard
@@ -71,7 +72,7 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
     }
 
     static var userSelectableCases: [PlaybackProcessingMode] {
-        [.officialLike, .aiNoiseReduction, .standard, .combinedVoice]
+        [.officialLike, .loudnessStable, .aiNoiseReduction, .standard, .combinedVoice]
     }
 
     static func mainSurfaceCases(current mode: PlaybackProcessingMode) -> [PlaybackProcessingMode] {
@@ -92,6 +93,10 @@ enum PlaybackProcessingMode: String, CaseIterable, Identifiable {
 
     var usesNoiseReductionAdaptation: Bool {
         self == .aiNoiseReduction
+    }
+
+    var usesLoudnessNormalization: Bool {
+        self == .loudnessStable
     }
 
     var usesDualPlaybackChain: Bool {
@@ -289,6 +294,8 @@ enum VmicText {
     case playbackProcessingStandardDetail
     case playbackProcessingOfficialLike
     case playbackProcessingOfficialLikeDetail
+    case playbackProcessingLoudnessStable
+    case playbackProcessingLoudnessStableDetail
     case playbackProcessingAINoiseReduction
     case playbackProcessingAINoiseReductionDetail
     case playbackProcessingDualPlayback
@@ -497,6 +504,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingStandard)
         case .officialLike:
             return text(.playbackProcessingOfficialLike)
+        case .loudnessStable:
+            return text(.playbackProcessingLoudnessStable)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReduction)
         case .dualPlayback:
@@ -512,6 +521,8 @@ final class AppSettingsStore: ObservableObject {
             return text(.playbackProcessingStandardDetail)
         case .officialLike:
             return text(.playbackProcessingOfficialLikeDetail)
+        case .loudnessStable:
+            return text(.playbackProcessingLoudnessStableDetail)
         case .aiNoiseReduction:
             return text(.playbackProcessingAINoiseReductionDetail)
         case .dualPlayback:
@@ -902,6 +913,10 @@ final class AppSettingsStore: ObservableObject {
             return "官方式"
         case .playbackProcessingOfficialLikeDetail:
             return "只重申通话注入偏好，尽量贴近官方语音对照的时序。"
+        case .playbackProcessingLoudnessStable:
+            return "响度稳定"
+        case .playbackProcessingLoudnessStableDetail:
+            return "播放前分析平均电平和峰值，自动补偿小声素材，并限制峰值避免削波。"
         case .playbackProcessingAINoiseReduction:
             return "AI 降噪适配"
         case .playbackProcessingAINoiseReductionDetail:
@@ -1353,6 +1368,10 @@ final class AppSettingsStore: ObservableObject {
             return "Official-Like"
         case .playbackProcessingOfficialLikeDetail:
             return "Only reapplies the call injection preference to stay close to the official speech probe timing."
+        case .playbackProcessingLoudnessStable:
+            return "Loudness Guard"
+        case .playbackProcessingLoudnessStableDetail:
+            return "Analyzes RMS and peak level before playback, applies automatic gain, and caps peaks to avoid clipping."
         case .playbackProcessingAINoiseReduction:
             return "AI Noise Fit"
         case .playbackProcessingAINoiseReductionDetail:
